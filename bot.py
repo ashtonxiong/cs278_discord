@@ -147,7 +147,7 @@ class TriviaBot:
     async def start(self):
         while True:
             now = datetime.now(pytz.timezone(self.timezone))
-            next_run = now.replace(hour=11, minute=16, second=0, microsecond=0)
+            next_run = now.replace(hour=12, minute=0, second=0, microsecond=0)
             if now >= next_run:  # If it's past 12:00 PM PST today, schedule for the next day
                 next_run += timedelta(days=1)
             wait_seconds = (next_run - now).total_seconds()
