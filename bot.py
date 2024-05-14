@@ -113,18 +113,27 @@ class TriviaBot:
             response = self.openai_client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a music hub assistant, skilled in generating music trivia questions that include diverse musical interests."},
-                    {"role": "user", "content": "Compose a unique trivia question. Please just respond with the trivia question only, no explanation or introduction."}
+                    {"role": "system", "content": "You are a music trivia bot, skilled in generating interesting musical trivia questions with diverse musical interests. Format the trivia question followed by four possible answers and indicate the correct answer at the end as 'Correct: A'."},
+                    {"role": "user", "content": "Generate a trivia question with four possible answers, indicating which one is correct."}
                 ])
-            # Strip response
             if response.choices and response.choices[0].message:
-                prompt = response.choices[0].message.content.strip()
-                return prompt
+                trivia_data = response.choices[0].message.content.strip()
+                if 'Correct:' not in trivia_data:
+                    print("Unexpected format received:", trivia_data)
+                    return None, None, None  # Returning None to indicate an error in format
+
+                # Parse the trivia data into usable components
+                question_part, answer_part = trivia_data.split('Correct:')
+                question = question_part.strip()
+                correct_answer = answer_part.strip()
+                options = question.split('\n')[-4:]  # Get the last four lines as options
+                correct_answer_letter = correct_answer[0]
+                return question, options, correct_answer_letter
             else:
                 raise ValueError("No valid response received from OpenAI.")
         except Exception as e:
             print(f"Failed to generate trivia prompt.")
-            return None
+            return None, None, None
 
     async def unpin_messages(self):
         pins = await self.channel.pins()
@@ -138,29 +147,34 @@ class TriviaBot:
     async def start(self):
         while True:
             now = datetime.now(pytz.timezone(self.timezone))
-            next_run = now.replace(hour=12, minute=0, second=0, microsecond=0)
+            next_run = now.replace(hour=11, minute=16, second=0, microsecond=0)
             if now >= next_run:  # If it's past 12:00 PM PST today, schedule for the next day
                 next_run += timedelta(days=1)
             wait_seconds = (next_run - now).total_seconds()
             print(f"Waiting {wait_seconds} seconds until the next message at 12:00 PM {self.timezone}.")
             await asyncio.sleep(wait_seconds)
 
-            trivia_prompt = await self.generate_trivia_prompt()
-            if trivia_prompt and self.channel:
+            question, options, correct_answer_letter = await self.generate_trivia_prompt()
+            if question and options and correct_answer_letter and self.channel:
                 # Unpin all other messages in channel
                 await self.unpin_messages()
 
-                message = f"@everyone It's trivia time! 🎉\nToday's question is...\n`{trivia_prompt}`"
-                message += "\nRespond with your answer in this thread!\n"
+                message = f"It's trivia time! 🎉\n`{question}`\n"
+                message += "\nReact with 🎹 for A\nReact with 🎧 for B\nReact with 🎸 for C\nReact with 🎵 for D."
                 sent_message = await self.channel.send(message)
+                emojis = {'A': '🎹', 'B': '🎧', 'C': '🎸', 'D': '🎵'}
+                for option in options:
+                    emoji = emojis[option.strip()[0]]  # Ensure that we only get 'A', 'B', 'C', or 'D'
+                    await sent_message.add_reaction(emoji)
+
                 await sent_message.pin()
                 # Create thread out of trivia question
                 thread = await sent_message.create_thread(name="Trivia Question Discussion")
                 await thread.send("Discuss today's trivia question here!")
 
-            elif trivia_prompt and not self.channel:
+            elif question and options and correct_answer_letter and not self.channel:
                 print("Channel not found or missing. Check the configuration.\n")
-            elif self.channel and not trivia_prompt:
+            elif self.channel and not question and not options and not correct_answer_letter:
                 print("Could not generate trivia question.\n.")
             else:
                 print("Other error in start().\n")
