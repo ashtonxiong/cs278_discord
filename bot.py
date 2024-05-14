@@ -1,10 +1,13 @@
+import asyncio
 from enum import Enum, auto
+from datetime import datetime, timedelta
 import discord
 import json
 import logging
 import openai
 from openai import OpenAI
 import os
+import pytz
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -40,6 +43,14 @@ class ModBot(discord.Client):
         for guild in self.guilds:
             print(f' - {guild.name}')
         print('Press Ctrl-C to quit.')
+
+        trivia_channel = discord.utils.get(self.get_all_channels(), name='trivia')
+        if trivia_channel:
+            print(f"Found trivia channel: {trivia_channel.id}")
+            self.scheduler = TriviaBot(trivia_channel, self.openai_client)
+            asyncio.create_task(self.scheduler.start())
+        else:
+            print("Trivia channel not found. Make sure the bot is in the correct server and the channel exists.")
 
     async def on_message(self, message):
         # Ignore messages sent by bot to itself
@@ -90,6 +101,69 @@ class ModBot(discord.Client):
             self.State = State.AWAITING_MORE
 
         return None
+
+class TriviaBot:
+    def __init__(self, channel, openai_client, timezone='US/Pacific'):
+        self.channel = channel
+        self.timezone = timezone
+        self.openai_client = openai_client
+
+    async def generate_trivia_prompt(self):
+        try:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a music hub assistant, skilled in generating music trivia questions that include diverse musical interests."},
+                    {"role": "user", "content": "Compose a unique trivia question. Please just respond with the trivia question only, no explanation or introduction."}
+                ])
+            # Strip response
+            if response.choices and response.choices[0].message:
+                prompt = response.choices[0].message.content.strip()
+                return prompt
+            else:
+                raise ValueError("No valid response received from OpenAI.")
+        except Exception as e:
+            print(f"Failed to generate trivia prompt.")
+            return None
+
+    async def unpin_messages(self):
+        pins = await self.channel.pins()
+        if pins:
+            for pin in pins:
+                await pin.unpin()
+            print("All previous pins unpinned.")
+        else:
+            return None
+
+    async def start(self):
+        while True:
+            now = datetime.now(pytz.timezone(self.timezone))
+            next_run = now.replace(hour=12, minute=0, second=0, microsecond=0)
+            if now >= next_run:  # If it's past 12:00 PM PST today, schedule for the next day
+                next_run += timedelta(days=1)
+            wait_seconds = (next_run - now).total_seconds()
+            print(f"Waiting {wait_seconds} seconds until the next message at 12:00 PM {self.timezone}.")
+            await asyncio.sleep(wait_seconds)
+
+            trivia_prompt = await self.generate_trivia_prompt()
+            if trivia_prompt and self.channel:
+                # Unpin all other messages in channel
+                await self.unpin_messages()
+
+                message = f"@everyone It's trivia time! 🎉\nToday's question is...\n`{trivia_prompt}`"
+                message += "\nRespond with your answer in this thread!\n"
+                sent_message = await self.channel.send(message)
+                await sent_message.pin()
+                # Create thread out of trivia question
+                thread = await sent_message.create_thread(name="Trivia Question Discussion")
+                await thread.send("Discuss today's trivia question here!")
+
+            elif trivia_prompt and not self.channel:
+                print("Channel not found or missing. Check the configuration.\n")
+            elif self.channel and not trivia_prompt:
+                print("Could not generate trivia question.\n.")
+            else:
+                print("Other error in start().\n")
 
 client = ModBot()
 client.run(discord_token)
