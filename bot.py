@@ -159,7 +159,7 @@ class TriviaBot:
                 # Unpin all other messages in channel
                 await self.unpin_messages()
 
-                message = f"It's trivia time! 🎉\n`{question}`\n"
+                message = f"@everyone It's trivia time! 🎉\n`{question}`\n"
                 message += "\nReact with 🎹 for A\nReact with 🎧 for B\nReact with 🎸 for C\nReact with 🎵 for D."
                 sent_message = await self.channel.send(message)
                 emojis = {'A': '🎹', 'B': '🎧', 'C': '🎸', 'D': '🎵'}
