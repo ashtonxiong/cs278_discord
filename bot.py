@@ -191,7 +191,8 @@ class SpotifyBot:
         @bot.tree.command(name='authenticate_spotify', description='Authenticate with Spotify')
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            auth_url = f"http://localhost:8888/login?user_id={user_id}"
+            # auth_url = f"http://localhost:8888/login?user_id={user_id}"
+            auth_url = f"https://885e-128-12-122-208.ngrok-free.app/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @bot.tree.command(name='callback', description='Handle Spotify callback with code')
@@ -235,7 +236,8 @@ class SpotifyBot:
     async def get_fresh_token(self, token_info, user_id):
         if token_info and (token_info['expires_at'] - int(time.time()) < 60):
             # Token needs refreshing
-            refresh_url = f"http://localhost:8888/refresh_token?refresh_token={token_info['refresh_token']}"
+            # refresh_url = f"http://localhost:8888/refresh_token?refresh_token={token_info['refresh_token']}"
+            refresh_url = f"https://885e-128-12-122-208.ngrok-free.app/refresh_token?refresh_token={token_info['refresh_token']}"
             response = requests.get(refresh_url)
             if response.status_code == 200:
                 refreshed_token_info = response.json()
