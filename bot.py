@@ -4,6 +4,7 @@ from config import config
 from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
+from flash_server import get_token, save_token
 import json
 import logging
 import openai
@@ -13,6 +14,7 @@ import pytz
 import requests
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
+import time
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -184,21 +186,21 @@ class TriviaBot:
 class SpotifyBot:
     def __init__(self, client_id, client_secret, redirect_uri):
         self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope="user-read-playback-state user-read-email")
-        self.user_tokens = {}
-
+    
     async def setup_spotify_commands(self, bot):
         @bot.tree.command(name='authenticate_spotify', description='Authenticate with Spotify')
         async def authenticate_spotify(interaction: discord.Interaction):
-            auth_url = self.sp_oauth.get_authorize_url()
+            user_id = str(interaction.user.id)
+            auth_url = f"http://localhost:8888/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @bot.tree.command(name='callback', description='Handle Spotify callback with code')
-        async def callback(interaction: discord.Interaction, code: str):
-            user_id = str(interaction.user.id)
+        async def callback(interaction: discord.Interaction, code: str, state: str):
+            user_id = state
             token_info = self.sp_oauth.get_access_token(code)
             if 'refresh_token' in token_info:
                 token_info['expires_at'] = int(time.time()) + token_info['expires_in']
-                self.user_tokens[user_id] = token_info
+                save_token(user_id, token_info)  # Save the token to the database
                 await interaction.response.send_message("Authentication successful! You can now use Spotify commands.", ephemeral=True)
             else:
                 await interaction.response.send_message("Failed to receive all necessary token information from Spotify.", ephemeral=True)
@@ -206,29 +208,55 @@ class SpotifyBot:
         @bot.tree.command(name='playing', description='Get the currently playing song on Spotify')
         async def playing(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            access_token = await self.get_fresh_token(user_id)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
             if not access_token:
                 await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
                 return
+            
             sp = spotipy.Spotify(auth=access_token)
             current_track = sp.current_user_playing_track()
-            if current_track:
+            if current_track and current_track['item']:
                 track_name = current_track['item']['name']
                 artist_name = current_track['item']['artists'][0]['name']
-                await interaction.response.send_message(f'Now playing: {track_name} by {artist_name}')
+                album_cover_url = current_track['item']['album']['images'][0]['url']  # Get the album cover image URL
+                
+                embed = discord.Embed(
+                    title=f"Now playing: {track_name}",
+                    description=f"Artist: {artist_name}",
+                    color=discord.Color.blue()
+                )
+                embed.set_image(url=album_cover_url)
+                
+                await interaction.response.send_message(embed=embed)
             else:
                 await interaction.response.send_message('No track currently playing.')
 
-    async def get_fresh_token(self, user_id):
-        token_info = self.user_tokens.get(user_id, {})
-        if 'expires_at' in token_info and (token_info['expires_at'] - int(time.time()) < 60):
+    async def get_fresh_token(self, token_info, user_id):
+        if token_info and (token_info['expires_at'] - int(time.time()) < 60):
             # Token needs refreshing
-            refreshed_token_info = self.sp_oauth.refresh_access_token(token_info['refresh_token'])
-            token_info.update(refreshed_token_info)
-            token_info['expires_at'] = int(time.time()) + refreshed_token_info['expires_in']
-            self.user_tokens[user_id] = token_info
-        return token_info.get('access_token')
+            refresh_url = f"http://localhost:8888/refresh_token?refresh_token={token_info['refresh_token']}"
+            response = requests.get(refresh_url)
+            if response.status_code == 200:
+                refreshed_token_info = response.json()
+                refreshed_token_info['expires_at'] = int(time.time()) + self.sp_oauth.expires_in
+                save_token(user_id, refreshed_token_info)  # Save the refreshed token to the database
+                return refreshed_token_info['access_token']
+            else:
+                return None
+        return token_info.get('access_token') if token_info else None
 
+class ModBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(command_prefix='.', intents=intents)
+        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri)
+
+    async def on_ready(self):
+        print(f'{self.user.name} has connected to Discord!')
+
+        await self.spotify_bot.setup_spotify_commands(self)
 
 client = ModBot()
 client.run(discord_token)
