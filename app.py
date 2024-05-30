@@ -22,7 +22,7 @@ print(f"SPOTIPY_CLIENT_SECRET: {spotipy_client_secret}")
 print(f"SPOTIPY_REDIRECT_URI: {spotipy_redirect_uri}")
 
 scope = "user-read-playback-state user-read-currently-playing user-read-private user-library-read user-read-recently-played"
-sp_oauth = SpotifyOAuth(client_id=spotipy_client_id, client_secret=spotipy_client_secret, redirect_uri=spotipy_redirect_uri, scope=scope)
+sp_oauth = SpotifyOAuth(client_id=spotipy_client_id, client_secret=spotipy_client_secret, redirect_uri=spotipy_redirect_uri, scope=scope, show_dialog=True)
 
 user_tokens = {}
 
@@ -61,6 +61,7 @@ def callback():
         user_tokens[state] = token_info  # Store token_info with the user_id
         save_tokens()  # Save tokens to the file
         print(f"Stored token for user {state}: {token_info}")  # Debugging: Verify token storage
+        print(f"All tokens after storing: {user_tokens}")  # Debugging: Print all stored tokens
         return redirect(url_for('success', user_id=state))
     except SpotifyOauthError as e:
         print(f"Error during authentication: {str(e)}")  # Debugging: Log the error
@@ -83,7 +84,7 @@ def retry_authentication():
     if user_id in user_tokens:
         del user_tokens[user_id]  # Ensure old tokens are cleared
     auth_url = sp_oauth.get_authorize_url(state=user_id)
-    print(f"Retry Auth URL: {auth_url}")  # Print the authorization URL for debugging
+    print(f"Retry Auth URL for user {user_id}: {auth_url}")  # Print the authorization URL for debugging
     return redirect(auth_url)
 
 @app.route('/success')

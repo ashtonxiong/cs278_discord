@@ -30,9 +30,14 @@ def load_tokens():
     return {}
 
 user_tokens = load_tokens()
-print(f"Loaded user tokens: {user_tokens}")  # Debugging: Print loaded tokens
+print(f"Loaded user tokens at startup: {user_tokens}")  # Debugging: Print loaded tokens at startup
 
 def get_spotify_client(user_id):
+    global user_tokens  # Ensure we are accessing the global user_tokens
+    print(f"Calling get_spotify_client for user {user_id}")  # Debugging: Verify function call
+    user_tokens = load_tokens()  # Reload tokens to ensure we have the latest version
+    print(f"Current user tokens: {user_tokens}")  # Debugging: Print current tokens
+    print(f"Attempting to retrieve token for user {user_id}")  # Debugging: Attempt to retrieve token
     if user_id in user_tokens:
         token_info = user_tokens[user_id]
         print(f"Token info for user {user_id}: {token_info}")  # Debugging: Print token info
@@ -73,6 +78,7 @@ async def playing(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     print(f"Executing /playing command for user {user_id}")  # Debugging: Print command execution
     await interaction.response.defer()  # Acknowledge interaction to avoid timeout
+    print(f"Calling get_spotify_client from /playing for user {user_id}")  # Debugging: Verify function call
     sp = get_spotify_client(user_id)
     if sp is None:
         await interaction.followup.send('You need to authenticate with Spotify first. Use the /createprofile command.')
@@ -82,6 +88,11 @@ async def playing(interaction: discord.Interaction):
     devices = sp.devices()
     print(f"Available devices: {devices}")  # Debugging: Print available devices
 
+    if not devices['devices']:
+        await interaction.followup.send('No active devices found. Please make sure Spotify is playing on a device.')
+        return
+
+    # Check playback state
     current_playback = sp.current_playback()
     print(f"Current playback response: {current_playback}")  # Debugging: Print current playback response
     if current_playback and current_playback['is_playing']:
@@ -104,6 +115,7 @@ async def lyrics(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     print(f"Executing /lyrics command for user {user_id}")  # Debugging: Print command execution
     await interaction.response.defer()  # Acknowledge interaction to avoid timeout
+    print(f"Calling get_spotify_client from /lyrics for user {user_id}")  # Debugging: Verify function call
     sp = get_spotify_client(user_id)
     if sp is None:
         await interaction.followup.send('You need to authenticate with Spotify first. Use the /createprofile command.')
