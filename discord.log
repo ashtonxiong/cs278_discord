@@ -1,3 +1,13 @@
-2024-05-29 22:58:49,887:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
-2024-05-29 22:58:49,887:INFO:discord.client: logging in using static token
-2024-05-29 22:58:50,587:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: f42f05278846aa903fd7990a0a6217da).
+2024-05-29 23:10:17,871:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
+2024-05-29 23:10:17,872:INFO:discord.client: logging in using static token
+2024-05-29 23:10:18,690:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: fc9713ef160bbc49d969380114570c9b).
+2024-05-29 23:10:20,576:ERROR:discord.app_commands.tree: Ignoring exception in command tree
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/discord/app_commands/tree.py", line 1089, in wrapper
+    await self._call(interaction)
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/discord/app_commands/tree.py", line 1221, in _call
+    command, options = self._get_app_command_options(data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/discord/app_commands/tree.py", line 1125, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command 'authenticate_spotify' not found
