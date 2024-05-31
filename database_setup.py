@@ -13,7 +13,7 @@ class SpotifyToken(Base):
     token_type = Column(String)
     expires_in = Column(Integer)
     scope = Column(String)
-    expires_at = Column(Integer)  # Add this line
+    expires_at = Column(Integer)
 
     def __repr__(self):
         return f"<SpotifyToken(user_id='{self.user_id}', access_token='{self.access_token}')>"

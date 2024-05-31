@@ -30,6 +30,7 @@ if not os.path.isfile(token_path):
 with open(token_path) as f:
     tokens = json.load(f)
     discord_token = tokens['discord']
+    discord_guild = tokens['discord_guild']
     openai_api_key = tokens['openai']
     spotify_client_id = tokens['spotify_client_id']
     spotify_client_secret = tokens['spotify_client_secret']
@@ -47,6 +48,10 @@ class ModBot(commands.Bot):
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.user_state = {}
         self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri)
+
+    async def setup_hook(self):
+        self.tree.copy_global_to(guild=discord.Object(id=discord_guild))  
+        await self.tree.sync(guild=discord.Object(id=discord_guild))  
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -191,8 +196,8 @@ class SpotifyBot:
         @bot.tree.command(name='authenticate_spotify', description='Authenticate with Spotify')
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            # auth_url = f"http://localhost:8888/login?user_id={user_id}"
-            auth_url = f"https://885e-128-12-122-208.ngrok-free.app/login?user_id={user_id}"
+            auth_url = f"http://localhost:8888/login?user_id={user_id}"
+            # auth_url = f"https://885e-128-12-122-208.ngrok-free.app/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @bot.tree.command(name='callback', description='Handle Spotify callback with code')
@@ -233,11 +238,50 @@ class SpotifyBot:
             else:
                 await interaction.response.send_message('No track currently playing.')
 
+        @bot.tree.command(name='spotifyprofile', description='Get your Spotify profile')
+        async def spotifyprofile(interaction: discord.Interaction):
+            user_id = str(interaction.user.id)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if not access_token:
+                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+                return
+            
+            headers = {
+                'Authorization': f'Bearer {access_token}'
+            }
+            response = requests.get('https://api.spotify.com/v1/me', headers=headers)
+            if response.status_code == 200:
+                profile_data = response.json()
+                display_name = profile_data.get('display_name', 'N/A')
+                email = profile_data.get('email', 'N/A')
+                profile_url = profile_data.get('external_urls', {}).get('spotify', 'N/A')
+                profile_image_url = profile_data.get('images', [{}])[0].get('url', '')
+
+                embed = discord.Embed(
+                    title=f"Spotify Profile: {display_name}",
+                    description=f"[Profile URL]({profile_url})\nEmail: {email}",
+                    color=discord.Color.green()
+                )
+                if profile_image_url:
+                    embed.set_thumbnail(url=profile_image_url)
+                
+                await interaction.response.send_message(embed=embed)
+            else:
+                await interaction.response.send_message('Failed to retrieve Spotify profile.')
+            
+        @bot.tree.command(name='listening', description='Find who\'s listening to what on the server')
+        async def listening(interaction: discord.Interaction):
+            await interaction.response.send_message('This functionality is under development.')
+
+        logger.debug('Synchronizing commands with Discord')
+        await bot.tree.sync(guild=discord.Object(id=discord_guild))
+
     async def get_fresh_token(self, token_info, user_id):
         if token_info and (token_info['expires_at'] - int(time.time()) < 60):
             # Token needs refreshing
-            # refresh_url = f"http://localhost:8888/refresh_token?refresh_token={token_info['refresh_token']}"
-            refresh_url = f"https://885e-128-12-122-208.ngrok-free.app/refresh_token?refresh_token={token_info['refresh_token']}"
+            refresh_url = f"http://localhost:8888/refresh_token?refresh_token={token_info['refresh_token']}"
+            # refresh_url = f"https://885e-128-12-122-208.ngrok-free.app/refresh_token?refresh_token={token_info['refresh_token']}"
             response = requests.get(refresh_url)
             if response.status_code == 200:
                 refreshed_token_info = response.json()
@@ -247,18 +291,6 @@ class SpotifyBot:
             else:
                 return None
         return token_info.get('access_token') if token_info else None
-
-class ModBot(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.default()
-        intents.message_content = True
-        super().__init__(command_prefix='.', intents=intents)
-        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri)
-
-    async def on_ready(self):
-        print(f'{self.user.name} has connected to Discord!')
-
-        await self.spotify_bot.setup_spotify_commands(self)
 
 client = ModBot()
 client.run(discord_token)

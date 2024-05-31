@@ -123,7 +123,7 @@ def save_token(user_id, token_info):
         existing_token.token_type = token_info['token_type']
         existing_token.expires_in = token_info['expires_in']
         existing_token.scope = token_info['scope']
-        existing_token.expires_at = token_info['expires_at']  # Set expires_at
+        existing_token.expires_at = token_info['expires_at'] 
     else:
         new_token = SpotifyToken(
             user_id=user_id,
@@ -132,7 +132,7 @@ def save_token(user_id, token_info):
             token_type=token_info['token_type'],
             expires_in=token_info['expires_in'],
             scope=token_info['scope'],
-            expires_at=token_info['expires_at']  # Set expires_at
+            expires_at=token_info['expires_at'] 
         )
         sql_session.add(new_token)
     sql_session.commit()
@@ -149,7 +149,7 @@ def get_token(user_id):
             "token_type": token.token_type,
             "expires_in": token.expires_in,
             "scope": token.scope,
-            "expires_at": token.expires_at  # Include expires_at in the returned token info
+            "expires_at": token.expires_at  
         }
     return None
 
