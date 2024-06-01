@@ -48,12 +48,18 @@ class ModBot(commands.Bot):
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.user_state = {}
         self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri)
+        # self.tree = app_commands.CommandTree(self)
+
 
     async def setup_hook(self):
-        self.tree.copy_global_to(guild=discord.Object(id=discord_guild))  
-        await self.tree.sync(guild=discord.Object(id=discord_guild))  
+        self.tree.copy_global_to(guild=discord.Object(id=discord_guild))
+        await self.tree.sync(guild=discord.Object(id=discord_guild))
+
 
     async def on_ready(self):
+        # Moved from setup_hook
+        await self.tree.sync(guild=discord.Object(id=discord_guild))  
+
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
         for guild in self.guilds:
             print(f' - {guild.name}')
@@ -193,11 +199,17 @@ class SpotifyBot:
         self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope="user-read-playback-state user-read-email")
     
     async def setup_spotify_commands(self, bot):
+        @bot.tree.command(name='test', description='test normal command')
+        async def hello(interaction: discord.Interaction):
+            print("test /test command")
+            await interaction.response.send_message('Hello')
+
         @bot.tree.command(name='authenticate_spotify', description='Authenticate with Spotify')
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
             auth_url = f"http://localhost:8888/login?user_id={user_id}"
             # auth_url = f"https://885e-128-12-122-208.ngrok-free.app/login?user_id={user_id}"
+            print("test autheticate YES ")
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @bot.tree.command(name='callback', description='Handle Spotify callback with code')
