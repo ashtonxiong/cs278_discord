@@ -1,0 +1,7 @@
+env
+config
+__pycache__
+tokens.json
+discord.log
+spotify_tokens.db
+.cache
