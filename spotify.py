@@ -52,15 +52,39 @@ def get_spotify_client(user_id):
     print(f"No token found for user {user_id}")  # Debugging: No token found
     return None
 
+# Load profiles from file
+def load_profiles():
+    if os.path.exists('profiles.json'):
+        with open('profiles.json', 'r') as f:
+            return json.load(f)
+    return {}
+
+user_profiles = load_profiles()
+print(f"Loaded user profiles at startup: {user_profiles}")  # Debugging: Print loaded profiles at startup
+
+def save_profiles():
+    with open('profiles.json', 'w') as f:
+        json.dump(user_profiles, f)
+    print("Profiles saved successfully.")  # Debugging: Confirm profiles saved
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
-    # Register commands for all guilds the bot is a member of
+    print(f'Bot is ready and connected to the following guilds:')
     for guild in bot.guilds:
-        print(f"Registering commands for guild: {guild.name} ({guild.id})")
-        bot.tree.clear_commands(guild=guild)  # Clear existing commands to prevent duplicates
-        await bot.tree.sync(guild=guild)
-    print("Commands synchronized for all guilds")
+        print(f'{guild.name} ({guild.id})')
+
+@bot.tree.command(name='sync', description='Synchronize commands with Discord')
+@commands.is_owner()
+async def sync(interaction: discord.Interaction):
+    print(f'Syncing commands...')
+    try:
+        await bot.tree.sync()
+        await interaction.response.send_message('Commands synchronized successfully.')
+        print('Commands synchronized successfully.')
+    except Exception as e:
+        await interaction.response.send_message(f'Failed to synchronize commands: {e}')
+        print(f'Failed to synchronize commands: {e}')
 
 @bot.tree.command(name='profile', description='View your Spotify profile')
 async def profile(interaction: discord.Interaction):
@@ -68,7 +92,7 @@ async def profile(interaction: discord.Interaction):
     print(f"Executing /profile command for user {user_id}")  # Debugging: Print command execution
     sp = get_spotify_client(user_id)
     if sp is None:
-        await interaction.response.send_message('You need to authenticate with Spotify first. Use the /createprofile command.')
+        await interaction.response.send_message('You need to authenticate with Spotify first. Use the /authenticate command.')
         return
     profile_data = sp.current_user()
     await interaction.response.send_message(f"Profile for {profile_data['display_name']}: {profile_data['external_urls']['spotify']}")
@@ -81,7 +105,7 @@ async def playing(interaction: discord.Interaction):
     print(f"Calling get_spotify_client from /playing for user {user_id}")  # Debugging: Verify function call
     sp = get_spotify_client(user_id)
     if sp is None:
-        await interaction.followup.send('You need to authenticate with Spotify first. Use the /createprofile command.')
+        await interaction.followup.send('You need to authenticate with Spotify first. Use the /authenticate command.')
         return
 
     # Check available devices
@@ -96,7 +120,15 @@ async def playing(interaction: discord.Interaction):
     current_playback = sp.current_playback()
     print(f"Current playback response: {current_playback}")  # Debugging: Print current playback response
     if current_playback and current_playback['is_playing']:
-        await interaction.followup.send(f"Now playing: {current_playback['item']['name']} by {current_playback['item']['artists'][0]['name']}")
+        track_name = current_playback['item']['name']
+        artist_name = current_playback['item']['artists'][0]['name']
+        album_cover = current_playback['item']['album']['images'][0]['url']
+
+        embed = discord.Embed(title="Now playing", description=f"**{track_name}**", color=0x1DB954)
+        embed.add_field(name="Artist", value=artist_name, inline=True)
+        embed.set_thumbnail(url=album_cover)
+
+        await interaction.followup.send(embed=embed)
     else:
         await interaction.followup.send('No music is currently playing.')
 
@@ -104,11 +136,41 @@ async def playing(interaction: discord.Interaction):
 async def listening(interaction: discord.Interaction):
     await interaction.response.send_message('This functionality is under development.')
 
-@bot.tree.command(name='createprofile', description='Create a Spotify profile')
-async def create_profile(interaction: discord.Interaction):
+@bot.tree.command(name='authenticate', description='Authenticate with Spotify')
+async def authenticate(interaction: discord.Interaction):
     auth_url = sp_oauth.get_authorize_url(state=str(interaction.user.id))
     print(f"Auth URL for {interaction.user.id}: {auth_url}")  # Print the authorization URL for debugging
     await interaction.response.send_message(f"Please authenticate with Spotify using this URL: {auth_url}")
+
+@bot.tree.command(name='createprofile', description='Create your music profile')
+async def create_profile(interaction: discord.Interaction):
+    user_id = str(interaction.user.id)
+    await interaction.response.send_message('Please answer the following questions to create your music profile:')
+
+    def check(msg):
+        return msg.author == interaction.user and msg.channel == interaction.channel
+
+    questions = [
+        "Who are you? What do you look for in music?",
+        "Who are your favorite music artists?",
+        "What genres of music do you listen to?"
+    ]
+
+    answers = []
+
+    for question in questions:
+        await interaction.followup.send(question)
+        msg = await bot.wait_for('message', check=check)
+        answers.append(msg.content)
+
+    user_profiles[user_id] = {
+        "Who are you?": answers[0],
+        "Favorite artists": answers[1],
+        "Genres": answers[2]
+    }
+    
+    save_profiles()
+    await interaction.followup.send('Your profile has been created successfully!')
 
 @bot.tree.command(name='lyrics', description='Shows lyrics for the current song playing')
 async def lyrics(interaction: discord.Interaction):
@@ -118,7 +180,7 @@ async def lyrics(interaction: discord.Interaction):
     print(f"Calling get_spotify_client from /lyrics for user {user_id}")  # Debugging: Verify function call
     sp = get_spotify_client(user_id)
     if sp is None:
-        await interaction.followup.send('You need to authenticate with Spotify first. Use the /createprofile command.')
+        await interaction.followup.send('You need to authenticate with Spotify first. Use the /authenticate command.')
         return
     current_playback = sp.current_playback()
     print(f"Current playback response: {current_playback}")  # Debugging: Print current playback response
