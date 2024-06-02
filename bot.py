@@ -19,7 +19,7 @@ import time
 from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from database_setup import Base, SpotifyToken, Playlist, add_playlist_to_db, fetch_playlists_from_db
+from database_setup import Base, SpotifyToken, add_playlist_to_db, fetch_all_playlists_from_db
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -295,7 +295,7 @@ class TriviaBot:
 class SpotifyBot:
     def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles):
         self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, 
-                                     scope="user-read-private user-read-email user-read-playback-state user-top-read playlist-modify-public playlist-modify-private playlist-read-collaborative")
+                                     scope="user-read-private user-read-email user-read-playback-state user-top-read playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private")
         self.tree = tree
         self.guild = discord.Object(id=guild_id)
         self.user_profiles = user_profiles
@@ -304,7 +304,8 @@ class SpotifyBot:
         @self.tree.command(name='authenticate_spotify2', description='Authenticate with Spotify', guild=self.guild)
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            auth_url = f"http://localhost:8888/login?user_id={user_id}"
+            # auth_url = f"http://localhost:8888/login?user_id={user_id}"
+            auth_url = f"https://771f-128-12-123-153.ngrok-free.app/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @self.tree.command(name='spotify_profile', description='Share your Spotify profile', guild=self.guild)
@@ -526,9 +527,9 @@ class SpotifyBot:
             except spotipy.exceptions.SpotifyException as e:
                 await interaction.response.send_message(f"Failed to retrieve playlist details: {e}", ephemeral=True)
 
-        @self.tree.command(name='playlist_create', description="Create a collaborative playlist for the server", guild=self.guild)
+        @self.tree.command(name='playlistcreate', description="Create a collaborative playlist for the server", guild=self.guild)
         @app_commands.describe(name="The name of the playlist", description="The description of the playlist")
-        async def playlist_create(interaction: discord.Interaction, name: str, description: str):
+        async def playlistcreate(interaction: discord.Interaction, name: str, description: str):
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
             access_token = await self.get_fresh_token(token_info, user_id)
@@ -539,14 +540,76 @@ class SpotifyBot:
             sp = spotipy.Spotify(auth=access_token)
             user_profile = sp.current_user()
             try:
-                playlist = sp.user_playlist_create(user=user_profile['id'], name=name, public=True, description=description)
-                playlist_url = playlist['external_urls']['spotify']
+                playlist = sp.user_playlist_create(
+                    user=user_profile['id'],
+                    name=name,
+                    public=False,  # To create a collaborative playlist, public must be False
+                    description=description
+                )
+                playlist_id = playlist['id']
+                # Set the playlist to be collaborative
+                sp.playlist_change_details(playlist_id=playlist_id, collaborative=True)
+                
                 # Add playlist to the database
-                add_playlist_to_db(playlist['id'], name, description, playlist_url, user_id)
+                playlist_url = playlist['external_urls']['spotify']
+                add_playlist_to_db(playlist_id, name, description, playlist_url, user_id)
                 await interaction.response.send_message(f"Collaborative playlist created: [Playlist Link]({playlist_url})")
             except spotipy.exceptions.SpotifyException as e:
                 await interaction.response.send_message(f"Failed to create playlist: {e}", ephemeral=True)
 
+        # @self.tree.command(name='playlist_add', description="Add a song to a collaborative playlist", guild=self.guild)
+        # @app_commands.describe(playlist_name="The name of the playlist", track_id="The ID of the track to add")
+        # async def playlist_add(interaction: discord.Interaction, playlist_name: str, track_id: str):
+        #     user_id = str(interaction.user.id)
+        #     token_info = get_token(user_id)  # Retrieve the token from the database
+        #     access_token = await self.get_fresh_token(token_info, user_id)
+        #     if not access_token:
+        #         await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+        #         return
+
+        #     sp = spotipy.Spotify(auth=access_token)
+            
+        #     # Search for the playlist by name
+        #     playlists = fetch_all_playlists_from_db()
+        #     playlist_id = None
+        #     for playlist in playlists:
+        #         if playlist.name.lower() == playlist_name.lower():
+        #             playlist_id = playlist.playlist_id  # Ensure this is treated as a string
+        #             break
+
+        #     if not playlist_id:
+        #         await interaction.response.send_message(f"Playlist '{playlist_name}' not found.", ephemeral=True)
+        #         return
+
+        #     # Retrieve the track details using the track ID
+        #     try:
+        #         track = sp.track(track_id)
+        #         track_name = track['name']
+        #         track_artists = ', '.join([artist['name'] for artist in track['artists']])
+        #         album_name = track['album']['name']
+        #         album_cover_url = track['album']['images'][0]['url'] if track['album']['images'] else None
+        #         track_url = track['external_urls']['spotify']
+        #     except spotipy.exceptions.SpotifyException as e:
+        #         await interaction.response.send_message(f"Failed to retrieve track details: {e}", ephemeral=True)
+        #         return
+
+        #     # Add the track to the playlist
+        #     try:
+        #         sp.user_playlist_add_tracks(user=user_id, playlist_id=playlist_id, tracks=[track_id])
+                
+        #         # Create embed
+        #         embed = discord.Embed(
+        #             title=f"'{track_name}' by {track_artists}",
+        #             description=f"Album: {album_name}",
+        #             url=track_url,
+        #             color=discord.Color.green()
+        #         )
+        #         if album_cover_url:
+        #             embed.set_thumbnail(url=album_cover_url)
+
+        #         await interaction.response.send_message(f"'{track_name}' by {track_artists} added to playlist '{playlist_name}'.", embed=embed)
+        #     except spotipy.exceptions.SpotifyException as e:
+        #         await interaction.response.send_message(f"Failed to add track: {e}", ephemeral=True)
         @self.tree.command(name='playlist_add', description="Add a song to a collaborative playlist", guild=self.guild)
         @app_commands.describe(playlist_name="The name of the playlist", track_id="The ID of the track to add")
         async def playlist_add(interaction: discord.Interaction, playlist_name: str, track_id: str):
@@ -556,17 +619,21 @@ class SpotifyBot:
             if not access_token:
                 await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
                 return
+
             sp = spotipy.Spotify(auth=access_token)
+            
             # Search for the playlist by name
-            playlists = fetch_playlists_from_db(user_id)
+            playlists = fetch_all_playlists_from_db()
             playlist_id = None
             for playlist in playlists:
                 if playlist.name.lower() == playlist_name.lower():
-                    playlist_id = playlist.id
+                    playlist_id = playlist.playlist_id  # Ensure this is treated as a string
                     break
+
             if not playlist_id:
                 await interaction.response.send_message(f"Playlist '{playlist_name}' not found.", ephemeral=True)
                 return
+
             # Retrieve the track details using the track ID
             try:
                 track = sp.track(track_id)
@@ -578,9 +645,11 @@ class SpotifyBot:
             except spotipy.exceptions.SpotifyException as e:
                 await interaction.response.send_message(f"Failed to retrieve track details: {e}", ephemeral=True)
                 return
+
             # Add the track to the playlist
             try:
-                sp.user_playlist_add_tracks(user=user_id, playlist_id=playlist_id, tracks=[track_id])
+                sp.playlist_add_items(playlist_id=playlist_id, items=[track_id])
+                
                 # Create embed
                 embed = discord.Embed(
                     title=f"'{track_name}' by {track_artists}",
@@ -590,32 +659,27 @@ class SpotifyBot:
                 )
                 if album_cover_url:
                     embed.set_thumbnail(url=album_cover_url)
+
                 await interaction.response.send_message(f"'{track_name}' by {track_artists} added to playlist '{playlist_name}'.", embed=embed)
             except spotipy.exceptions.SpotifyException as e:
                 await interaction.response.send_message(f"Failed to add track: {e}", ephemeral=True)
 
-        @self.tree.command(name='collaborative_playlists', description="Show a list of collaborative playlists", guild=self.guild)
-        async def collaborative_playlists(interaction: discord.Interaction):
+        @self.tree.command(name='playlists', description="Show a list of collaborative playlists", guild=self.guild)
+        async def playlists(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            playlists = fetch_playlists_from_db(user_id)
-
-            if not playlists:
-                await interaction.response.send_message("You have no playlists.", ephemeral=True)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if not access_token:
+                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
                 return
-            embeds = []
-            embed = discord.Embed(title="Your Collaborative Playlists", color=discord.Color.purple())
-            field_count = 0
+
+            playlists = fetch_all_playlists_from_db()
+            embed = discord.Embed(title="Collaborative Playlists", color=discord.Color.purple())
+
             for playlist in playlists:
-                embed.add_field(name=playlist.name, value=f"[Link]({playlist.url})", inline=False)
-                field_count += 1
-                if field_count == 25:
-                    embeds.append(embed)
-                    embed = discord.Embed(title="Your Collaborative Playlists (continued)", color=discord.Color.purple())
-                    field_count = 0
-            if field_count > 0:
-                embeds.append(embed)
-            for embed in embeds:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                embed.add_field(name=playlist.name, value=f"[Link]({playlist.playlist_url})", inline=False)
+
+            await interaction.response.send_message(embed=embed)
 
         # @self.tree.command(name='top5songs', description='Share your top 5 songs on Spotify', guild=self.guild)
         # async def top5songs(interaction: discord.Interaction):

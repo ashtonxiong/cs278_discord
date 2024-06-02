@@ -18,16 +18,17 @@ class SpotifyToken(Base):
     def __repr__(self):
         return f"<SpotifyToken(user_id='{self.user_id}', access_token='{self.access_token}')>"
 
-class Playlist(Base):
-    __tablename__ = 'playlists'
-    id = Column(String, primary_key=True)
+class CollaborativePlaylist(Base):
+    __tablename__ = 'collaborative_playlists'
+    id = Column(Integer, primary_key=True)
+    playlist_id = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=False)
     description = Column(String)
-    url = Column(String, nullable=False)
-    user_id = Column(String, nullable=False)
+    playlist_url = Column(String, nullable=False)  # Ensure this column is defined
+    created_by = Column(String, nullable=False)
 
     def __repr__(self):
-        return f"<Playlist(name='{self.name}', user_id='{self.user_id}')>"
+        return f"<CollaborativePlaylist(playlist_id='{self.playlist_id}', name='{self.name}')>"
 
 # Set up the database
 engine = create_engine('sqlite:///spotify_tokens.db')
@@ -37,10 +38,21 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 sql_session = Session()
 
-def add_playlist_to_db(playlist_id, name, description, url, user_id):
-    playlist = Playlist(id=playlist_id, name=name, description=description, url=url, user_id=user_id)
-    sql_session.add(playlist)
-    sql_session.commit()
+def add_playlist_to_db(playlist_id, name, description, playlist_url, user_id):
+    session = Session()
+    new_playlist = CollaborativePlaylist(
+        playlist_id=playlist_id,
+        name=name,
+        description=description,
+        playlist_url=playlist_url,
+        created_by=user_id
+    )
+    session.add(new_playlist)
+    session.commit()
+    session.close()
 
-def fetch_playlists_from_db(user_id):
-    return sql_session.query(Playlist).filter_by(user_id=user_id).all()
+def fetch_all_playlists_from_db():
+    session = Session()
+    playlists = session.query(CollaborativePlaylist).all()
+    session.close()
+    return playlists
