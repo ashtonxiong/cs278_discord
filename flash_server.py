@@ -1,5 +1,5 @@
 from flask import Flask, request, redirect, session as flask_session, jsonify, url_for
-from database_setup import sql_session, SpotifyToken
+from database_setup import get_session, SpotifyToken
 import json
 import os
 import requests
@@ -116,7 +116,7 @@ def refresh_token():
 
 
 def save_token(user_id, token_info):
-    existing_token = sql_session.query(SpotifyToken).filter_by(user_id=user_id).first()
+    existing_token = get_session().query(SpotifyToken).filter_by(user_id=user_id).first()
     if existing_token:
         existing_token.access_token = token_info['access_token']
         existing_token.refresh_token = token_info.get('refresh_token', existing_token.refresh_token)
@@ -134,24 +134,21 @@ def save_token(user_id, token_info):
             scope=token_info['scope'],
             expires_at=token_info['expires_at'] 
         )
-        sql_session.add(new_token)
-    sql_session.commit()
+        get_session.add(new_token)
+    get_session().commit()
     print(f"Token for user {user_id} saved to the database")
 
 
 def get_token(user_id):
-    token = sql_session.query(SpotifyToken).filter_by(user_id=user_id).first()
-    if token:
-        print(f"Token for user {user_id} retrieved from the database")
-        return {
-            "access_token": token.access_token,
-            "refresh_token": token.refresh_token,
-            "token_type": token.token_type,
-            "expires_in": token.expires_in,
-            "scope": token.scope,
-            "expires_at": token.expires_at  
-        }
-    return None
+    session = get_session()  # Call the function to get a session object
+    try:
+        token = session.query(SpotifyToken).filter_by(user_id=user_id).first()
+        return token
+    except Exception as e:
+        print(f"Error fetching token for user {user_id}: {e}")
+        return None
+    finally:
+        session.close()
 
 
 if __name__ == '__main__':
