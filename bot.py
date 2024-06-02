@@ -88,6 +88,14 @@ class ModBot(commands.Bot):
         else:
             print("Trivia channel not found. Make sure the bot is in the correct server and the channel exists.")
 
+        daily_tunein_channel = discord.utils.get(self.get_all_channels(), name='daily-tunein')
+        if daily_tunein_channel:
+            print(f"Found daily tune-in channel: {daily_tunein_channel.id}")
+            self.daily_tunein_scheduler = DailyTuneInBot(daily_tunein_channel)
+            asyncio.create_task(self.daily_tunein_scheduler.start())
+        else:
+            print("Daily tune-in channel not found. Make sure the bot is in the correct server and the channel exists.")
+
     async def on_message(self, message):
         if message.author == self.user:
             return
@@ -290,6 +298,30 @@ class TriviaBot:
                 print("Could not generate trivia question.\n.")
             else:
                 print("Other error in start().\n")
+
+
+
+class DailyTuneInBot:
+    def __init__(self, channel, timezone='US/Pacific'):
+        self.channel = channel
+        self.timezone = timezone
+
+    async def start(self):
+        while True:
+            now = datetime.now(pytz.timezone(self.timezone))
+            next_run = now.replace(hour=17, minute=0, second=0, microsecond=0)
+            if now >= next_run:
+                next_run += timedelta(days=1)
+            wait_seconds = (next_run - now).total_seconds()
+            print(f"Waiting {wait_seconds} seconds until the next message at 5:00 PM {self.timezone}.")
+            await asyncio.sleep(wait_seconds)
+
+            if self.channel:
+                await self.channel.send("@everyone It's daily tune-in time! 🎶\n")
+                await self.channel.send("Use `/authenticate` to re-authenticate with Spotify.")
+                await self.channel.send("Then use `/currently_playing` to share your currently playing song!")
+            else:
+                print("Daily tune-in channel not found. Check the configuration.\n")
 
 
 
@@ -640,17 +672,27 @@ class SpotifyBot:
             response = requests.get(refresh_url)
             if response.status_code == 200:
                 refreshed_token_info = response.json()
-                if 'expires_in' in refreshed_token_info:
-                    refreshed_token_info['expires_at'] = int(time.time()) + refreshed_token_info['expires_in']
-                    save_token(user_id, refreshed_token_info)  # Save the refreshed token to the database
-                    return refreshed_token_info['access_token']
+                logging.debug(f"Refreshed token response: {refreshed_token_info}")
+                expires_in = refreshed_token_info.get('expires_in')
+                if expires_in is not None:
+                    refreshed_token_info['expires_at'] = int(time.time()) + expires_in
                 else:
                     logging.error(f"Response did not contain 'expires_in': {refreshed_token_info}")
-                    return None
+                    # Set a default expires_at if 'expires_in' is missing (assuming 1 hour lifespan)
+                    refreshed_token_info['expires_at'] = int(time.time()) + 3600
+                
+                # Ensure token_type is included
+                if 'token_type' not in refreshed_token_info:
+                    refreshed_token_info['token_type'] = 'Bearer'
+
+                save_token(user_id, refreshed_token_info)  # Save the refreshed token to the database
+                return refreshed_token_info['access_token']
             else:
                 logging.error(f"Failed to refresh token: {response.status_code} {response.text}")
                 return None
         return token_info.access_token if token_info else None
 
+
+        
 client = ModBot()
 client.run(discord_token)
