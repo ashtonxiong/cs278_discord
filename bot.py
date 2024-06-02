@@ -62,6 +62,8 @@ class ModBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True
+        intents.presences = True
         super().__init__(command_prefix='.', intents=intents)
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.user_state = {}  # Store states for bot DM interactions
@@ -293,7 +295,7 @@ class TriviaBot:
 class SpotifyBot:
     def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles):
         self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, 
-                                     scope="user-read-private user-read-email user-read-playback-state user-top-read playlist-modify-public playlist-modify-private")
+                                     scope="user-read-private user-read-email user-read-playback-state user-top-read playlist-modify-public playlist-modify-private playlist-read-collaborative")
         self.tree = tree
         self.guild = discord.Object(id=guild_id)
         self.user_profiles = user_profiles
@@ -305,8 +307,8 @@ class SpotifyBot:
             auth_url = f"http://localhost:8888/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
-        @self.tree.command(name='spotifyprofile', description='Share your Spotify profile', guild=self.guild)
-        async def spotifyprofile(interaction: discord.Interaction):
+        @self.tree.command(name='spotify_profile', description='Share your Spotify profile', guild=self.guild)
+        async def spotify_profile(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
             access_token = await self.get_fresh_token(token_info, user_id)
@@ -365,58 +367,80 @@ class SpotifyBot:
         #     else:
         #         await interaction.response.send_message("Failed to receive all necessary token information from Spotify.", ephemeral=True)
 
+        # @self.tree.command(name='playing2', description='Share your currently playing song on Spotify', guild=self.guild)
+        # async def playing(interaction: discord.Interaction):
+        #     user_id = str(interaction.user.id)
+        #     token_info = get_token(user_id)  # Retrieve the token from the database
+        #     access_token = await self.get_fresh_token(token_info, user_id)
+        #     if not access_token:
+        #         await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+        #         return
+            
+        #     sp = spotipy.Spotify(auth=access_token)
+        #     current_track = sp.current_user_playing_track()
+        #     if current_track and current_track['item']:
+        #         track_name = current_track['item']['name']
+        #         artist_name = current_track['item']['artists'][0]['name']
+        #         album_cover_url = current_track['item']['album']['images'][0]['url']  # Get the album cover image URL
+                
+        #         embed = discord.Embed(
+        #             title=f"Now playing: {track_name}",
+        #             description=f"Artist: {artist_name}",
+        #             color=discord.Color.blue()
+        #         )
+        #         embed.set_image(url=album_cover_url)
+                
+        #         await interaction.response.send_message(embed=embed)
+        #     else:
+        #         await interaction.response.send_message('No track currently playing.')
         @self.tree.command(name='playing2', description='Share your currently playing song on Spotify', guild=self.guild)
         async def playing(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            token_info = get_token(user_id)  # Retrieve the token from the database
-            access_token = await self.get_fresh_token(token_info, user_id)
-            if not access_token:
-                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
-                return
+            track_info = await self.fetch_currently_playing(user_id)
             
-            sp = spotipy.Spotify(auth=access_token)
-            current_track = sp.current_user_playing_track()
-            if current_track and current_track['item']:
-                track_name = current_track['item']['name']
-                artist_name = current_track['item']['artists'][0]['name']
-                album_cover_url = current_track['item']['album']['images'][0]['url']  # Get the album cover image URL
-                
+            if track_info:
                 embed = discord.Embed(
-                    title=f"Now playing: {track_name}",
-                    description=f"Artist: {artist_name}",
+                    title=f"Now playing: {track_info['track_name']}",
+                    description=f"Artist: {track_info['artist_name']}",
                     color=discord.Color.blue()
                 )
-                embed.set_image(url=album_cover_url)
+                if track_info['album_cover_url']:
+                    embed.set_thumbnail(url=track_info['album_cover_url'])
                 
                 await interaction.response.send_message(embed=embed)
             else:
                 await interaction.response.send_message('No track currently playing.')
 
-        # NEEDS TO BE FIXED
         @self.tree.command(name='listening', description="Find who's listening to what on the server", guild=self.guild)
         async def listening(interaction: discord.Interaction):
             members = interaction.guild.members
             listening_info = []
             for member in members:
                 user_id = str(member.id)
-                token_info = get_token(user_id)
-                if token_info:
-                    access_token = await self.get_fresh_token(token_info, user_id)
-                    if access_token:
-                        sp = spotipy.Spotify(auth=access_token)
-                        try:
-                            current_track = sp.current_user_playing_track()
-                            if current_track and current_track['item']:
-                                track_name = current_track['item']['name']
-                                artist_name = current_track['item']['artists'][0]['name']
-                                listening_info.append(f"{member.display_name} is listening to '{track_name}' by {artist_name}")
-                        except spotipy.SpotifyException as e:
-                            print(f"Spotify API error for user {member.display_name}: {e}")
+                track_info = await self.fetch_currently_playing(user_id)
+                if track_info:
+                    listening_info.append({
+                        "member_name": member.display_name,
+                        "track_name": track_info['track_name'],
+                        "artist_name": track_info['artist_name'],
+                        "album_cover_url": track_info['album_cover_url'],
+                        "track_url": track_info['track_url']
+                    })
+
             if listening_info:
-                reply = "Here's what everyone is listening to right now:\n" + "\n".join(listening_info)
+                embed = discord.Embed(title="Currently Listening To", color=discord.Color.blue())
+                for info in listening_info:
+                    embed.add_field(
+                        name=f"{info['member_name']} is listening to:",
+                        value=f"[{info['track_name']} by {info['artist_name']}]({info['track_url']})",
+                        inline=False
+                    )
+                    if info['album_cover_url']:
+                        embed.set_thumbnail(url=info['album_cover_url'])
+
+                await interaction.response.send_message(embed=embed)
             else:
-                reply = "No one is currently listening to anything on Spotify or they haven't authenticated."
-            await interaction.response.send_message(reply)
+                await interaction.response.send_message("No one is currently listening to anything on Spotify or they haven't authenticated.", ephemeral=True)
 
         @self.tree.command(name='recommend', description='Recommend a song, album, or artist to the channel', guild=self.guild)
         @app_commands.describe(search_type="Type of search: track, album, artist", query="Title of song, album, or artist name")
@@ -467,9 +491,44 @@ class SpotifyBot:
 
             await interaction.response.send_message(embed=embed)
 
-        @self.tree.command(name='playlistcreate', description="Create a collaborative playlist for the server", guild=self.guild)
+        @self.tree.command(name='share_playlist', description="Share one of your Spotify playlists", guild=self.guild)
+        @app_commands.describe(playlist_name="The name of the playlist you want to share")
+        async def share_playlist(interaction: discord.Interaction, playlist_name: str):
+            user_id = str(interaction.user.id)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if not access_token:
+                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+                return
+
+            sp = spotipy.Spotify(auth=access_token)
+            try:
+                playlist = await self.find_playlist_by_name(sp, playlist_name)
+                if playlist:
+                    playlist_name = playlist['name']
+                    playlist_description = playlist['description']
+                    playlist_owner = playlist['owner']['display_name']
+                    playlist_image = playlist['images'][0]['url'] if playlist['images'] else None
+                    playlist_url = playlist['external_urls']['spotify']
+
+                    embed = discord.Embed(
+                        title=f"Playlist: {playlist_name}",
+                        description=f"Description: {playlist_description}\nOwner: {playlist_owner}",
+                        url=playlist_url,
+                        color=discord.Color.blue()
+                    )
+                    if playlist_image:
+                        embed.set_thumbnail(url=playlist_image)
+
+                    await interaction.response.send_message(embed=embed)
+                else:
+                    await interaction.response.send_message(f"No playlist named '{playlist_name}' found for user {user_id}.", ephemeral=True)
+            except spotipy.exceptions.SpotifyException as e:
+                await interaction.response.send_message(f"Failed to retrieve playlist details: {e}", ephemeral=True)
+
+        @self.tree.command(name='playlist_create', description="Create a collaborative playlist for the server", guild=self.guild)
         @app_commands.describe(name="The name of the playlist", description="The description of the playlist")
-        async def playlistcreate(interaction: discord.Interaction, name: str, description: str):
+        async def playlist_create(interaction: discord.Interaction, name: str, description: str):
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
             access_token = await self.get_fresh_token(token_info, user_id)
@@ -488,9 +547,9 @@ class SpotifyBot:
             except spotipy.exceptions.SpotifyException as e:
                 await interaction.response.send_message(f"Failed to create playlist: {e}", ephemeral=True)
 
-        @self.tree.command(name='playlistadd', description="Add a song to a collaborative playlist", guild=self.guild)
+        @self.tree.command(name='playlist_add', description="Add a song to a collaborative playlist", guild=self.guild)
         @app_commands.describe(playlist_name="The name of the playlist", track_id="The ID of the track to add")
-        async def playlistadd(interaction: discord.Interaction, playlist_name: str, track_id: str):
+        async def playlist_add(interaction: discord.Interaction, playlist_name: str, track_id: str):
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
             access_token = await self.get_fresh_token(token_info, user_id)
@@ -535,8 +594,8 @@ class SpotifyBot:
             except spotipy.exceptions.SpotifyException as e:
                 await interaction.response.send_message(f"Failed to add track: {e}", ephemeral=True)
 
-        @self.tree.command(name='playlists', description="Show a list of collaborative playlists", guild=self.guild)
-        async def playlists(interaction: discord.Interaction):
+        @self.tree.command(name='collaborative_playlists', description="Show a list of collaborative playlists", guild=self.guild)
+        async def collaborative_playlists(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
             playlists = fetch_playlists_from_db(user_id)
 
@@ -596,6 +655,60 @@ class SpotifyBot:
         #     else:
         #         await interaction.response.send_message('Could not retrieve top artists.')
 
+    # async def fetch_currently_playing(self, user_id: str):
+    #     token_info = get_token(user_id)  # Retrieve the token from the database
+    #     if token_info:
+    #         access_token = await self.get_fresh_token(token_info, user_id)
+    #         if access_token:
+    #             sp = spotipy.Spotify(auth=access_token)
+    #             try:
+    #                 current_track = sp.current_user_playing_track()
+    #                 if current_track and current_track['item']:
+    #                     track = current_track['item']
+    #                     track_name = track['name']
+    #                     artist_name = track['artists'][0]['name']
+    #                     album_cover_url = track['album']['images'][0]['url'] if track['album']['images'] else None
+    #                     track_url = track['external_urls']['spotify']
+    #                     return {
+    #                         "track_name": track_name,
+    #                         "artist_name": artist_name,
+    #                         "album_cover_url": album_cover_url,
+    #                         "track_url": track_url
+    #                     }
+    #             except spotipy.exceptions.SpotifyException as e:
+    #                 print(f"Spotify API error for user {user_id}: {e}")
+    #     return None
+    async def fetch_currently_playing(self, user_id: str):
+        token_info = get_token(user_id)  # Retrieve the token from the database
+        if token_info:
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if access_token:
+                sp = spotipy.Spotify(auth=access_token)
+                try:
+                    current_track = sp.current_user_playing_track()
+                    if current_track and current_track['item']:
+                        track = current_track['item']
+                        track_name = track['name']
+                        artist_name = track['artists'][0]['name']
+                        album_cover_url = track['album']['images'][0]['url'] if track['album']['images'] else None
+                        track_url = track['external_urls']['spotify']
+                        return {
+                            "track_name": track_name,
+                            "artist_name": artist_name,
+                            "album_cover_url": album_cover_url,
+                            "track_url": track_url
+                        }
+                except spotipy.exceptions.SpotifyException as e:
+                    logging.error(f"Spotify API error for user {user_id}: {e}")
+        return None
+
+    async def find_playlist_by_name(self, sp, playlist_name: str):
+            playlists = sp.current_user_playlists(limit=50)
+            for playlist in playlists['items']:
+                if playlist['name'].lower() == playlist_name.lower():
+                    return playlist
+            return None
+
     async def get_top_songs(self, access_token):
         sp = spotipy.Spotify(auth=access_token)
         top_tracks = sp.current_user_top_tracks(limit=5)
@@ -606,6 +719,20 @@ class SpotifyBot:
         top_artists = sp.current_user_top_artists(limit=5)
         return [artist['name'] for artist in top_artists['items']]
 
+    # async def get_fresh_token(self, token_info, user_id):
+    #     if token_info and (token_info['expires_at'] - int(time.time()) < 60):
+    #         # Token needs refreshing
+    #         refresh_url = f"http://localhost:8888/refresh_token?refresh_token={token_info['refresh_token']}"
+    #         response = requests.get(refresh_url)
+    #         if response.status_code == 200:
+    #             refreshed_token_info = response.json()
+    #             # refreshed_token_info['expires_at'] = int(time.time()) + self.sp_oauth.expires_in
+    #             refreshed_token_info['expires_at'] = int(time.time()) + refreshed_token_info['expires_in']
+    #             save_token(user_id, refreshed_token_info)  # Save the refreshed token to the database
+    #             return refreshed_token_info['access_token']
+    #         else:
+    #             return None
+    #     return token_info.get('access_token') if token_info else None
     async def get_fresh_token(self, token_info, user_id):
         if token_info and (token_info['expires_at'] - int(time.time()) < 60):
             # Token needs refreshing
@@ -613,10 +740,15 @@ class SpotifyBot:
             response = requests.get(refresh_url)
             if response.status_code == 200:
                 refreshed_token_info = response.json()
-                refreshed_token_info['expires_at'] = int(time.time()) + self.sp_oauth.expires_in
-                save_token(user_id, refreshed_token_info)  # Save the refreshed token to the database
-                return refreshed_token_info['access_token']
+                if 'expires_in' in refreshed_token_info:
+                    refreshed_token_info['expires_at'] = int(time.time()) + refreshed_token_info['expires_in']
+                    save_token(user_id, refreshed_token_info)  # Save the refreshed token to the database
+                    return refreshed_token_info['access_token']
+                else:
+                    logging.error(f"Response did not contain 'expires_in': {refreshed_token_info}")
+                    return None
             else:
+                logging.error(f"Failed to refresh token: {response.status_code} {response.text}")
                 return None
         return token_info.get('access_token') if token_info else None
 
