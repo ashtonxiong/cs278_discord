@@ -62,7 +62,7 @@ class ModBot(commands.Bot):
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.user_state = {}  # Store states for bot DM interactions
         self.user_profiles = {}  # Store music profiles
-        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri, self.tree, discord_guild)
+        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri, self.tree, discord_guild, self.user_profiles)
 
     async def setup_hook(self):
         await self.spotify_bot.setup_spotify_commands()
@@ -276,10 +276,11 @@ class TriviaBot:
 
 
 class SpotifyBot:
-    def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id):
+    def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles):
         self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope="user-read-playback-state user-read-email")
         self.tree = tree
         self.guild = discord.Object(id=guild_id)
+        self.user_profiles = user_profiles
     
     async def setup_spotify_commands(self):
         @self.tree.command(name='authenticate_spotify2', description='Authenticate with Spotify', guild=self.guild)
@@ -320,6 +321,21 @@ class SpotifyBot:
                 await interaction.response.send_message(embed=embed)
             else:
                 await interaction.response.send_message('Failed to retrieve Spotify profile.')
+
+        @self.tree.command(name='music_profile', description='Share your music profile with others', guild=self.guild)
+        async def music_profile(interaction: discord.Interaction):
+            user_id = interaction.user.id
+            profile = self.user_profiles.get(user_id)
+            if profile:
+                reply = f"**Music Profile for {interaction.user.display_name}:**\n"
+                reply += f"**Preferred Name:** {profile['name']}\n"
+                reply += f"**Favorite Genres:** {profile['genres']}\n"
+                reply += f"**Favorite Artists:** {profile['artists']}\n"
+                reply += f"**Most played song right now:** {profile['song']}\n"
+                reply += f"**Upcoming music events they're attending:** {profile['events']}\n"
+                await interaction.response.send_message(reply)
+            else:
+                await interaction.response.send_message('You do not have a music profile yet. Create one by DM\'ing the bot `music`.')
 
         # @self.tree.command(name='callback', description='Handle Spotify callback with code', guild=self.guild)
         # async def callback(interaction: discord.Interaction, code: str, state: str):
