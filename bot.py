@@ -3,6 +3,7 @@ from enum import Enum, auto
 from config import config
 from datetime import datetime, timedelta
 import discord
+from discord import app_commands
 from discord.ext import commands
 from flash_server import get_token, save_token
 import json
@@ -39,6 +40,8 @@ with open(token_path) as f:
 class State(Enum):
     MOD_START = auto()
     AWAITING_MORE = auto()
+    AWAITING_PROFILE_INFO = auto()
+    AWAITING_PROFILE_EDIT = auto()
 
 class ModBot(commands.Bot):
     def __init__(self):
@@ -47,11 +50,11 @@ class ModBot(commands.Bot):
         super().__init__(command_prefix='.', intents=intents)
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.user_state = {}
-        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri)
+        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri, self.tree, discord_guild)
 
     async def setup_hook(self):
-        self.tree.copy_global_to(guild=discord.Object(id=discord_guild))  
-        await self.tree.sync(guild=discord.Object(id=discord_guild))  
+        await self.spotify_bot.setup_spotify_commands()
+        await self.tree.sync(guild=discord.Object(id=discord_guild))
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -66,8 +69,6 @@ class ModBot(commands.Bot):
             asyncio.create_task(self.scheduler.start())
         else:
             print("Trivia channel not found. Make sure the bot is in the correct server and the channel exists.")
-
-        await self.spotify_bot.setup_spotify_commands(self)
 
     async def on_message(self, message):
         if message.author == self.user:
@@ -113,6 +114,8 @@ class ModBot(commands.Bot):
             self.State = State.AWAITING_MORE
 
         return None
+
+
 
 class TriviaBot:
     def __init__(self, channel, openai_client, timezone='US/Pacific'):
@@ -188,57 +191,23 @@ class TriviaBot:
             else:
                 print("Other error in start().\n")
 
+
+
 class SpotifyBot:
-    def __init__(self, client_id, client_secret, redirect_uri):
+    def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id):
         self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope="user-read-playback-state user-read-email")
+        self.tree = tree
+        self.guild = discord.Object(id=guild_id)
     
-    async def setup_spotify_commands(self, bot):
-        @bot.tree.command(name='authenticate_spotify', description='Authenticate with Spotify')
+    async def setup_spotify_commands(self):
+        @self.tree.command(name='authenticate_spotify2', description='Authenticate with Spotify', guild=self.guild)
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
             auth_url = f"http://localhost:8888/login?user_id={user_id}"
-            # auth_url = f"https://885e-128-12-122-208.ngrok-free.app/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
-        @bot.tree.command(name='callback', description='Handle Spotify callback with code')
-        async def callback(interaction: discord.Interaction, code: str, state: str):
-            user_id = state
-            token_info = self.sp_oauth.get_access_token(code)
-            if 'refresh_token' in token_info:
-                token_info['expires_at'] = int(time.time()) + token_info['expires_in']
-                save_token(user_id, token_info)  # Save the token to the database
-                await interaction.response.send_message("Authentication successful! You can now use Spotify commands.", ephemeral=True)
-            else:
-                await interaction.response.send_message("Failed to receive all necessary token information from Spotify.", ephemeral=True)
 
-        @bot.tree.command(name='playing', description='Get the currently playing song on Spotify')
-        async def playing(interaction: discord.Interaction):
-            user_id = str(interaction.user.id)
-            token_info = get_token(user_id)  # Retrieve the token from the database
-            access_token = await self.get_fresh_token(token_info, user_id)
-            if not access_token:
-                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
-                return
-            
-            sp = spotipy.Spotify(auth=access_token)
-            current_track = sp.current_user_playing_track()
-            if current_track and current_track['item']:
-                track_name = current_track['item']['name']
-                artist_name = current_track['item']['artists'][0]['name']
-                album_cover_url = current_track['item']['album']['images'][0]['url']  # Get the album cover image URL
-                
-                embed = discord.Embed(
-                    title=f"Now playing: {track_name}",
-                    description=f"Artist: {artist_name}",
-                    color=discord.Color.blue()
-                )
-                embed.set_image(url=album_cover_url)
-                
-                await interaction.response.send_message(embed=embed)
-            else:
-                await interaction.response.send_message('No track currently playing.')
-
-        @bot.tree.command(name='spotifyprofile', description='Get your Spotify profile')
+        @self.tree.command(name='spotifyprofile', description='Share your Spotify profile', guild=self.guild)
         async def spotifyprofile(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
@@ -269,19 +238,54 @@ class SpotifyBot:
                 await interaction.response.send_message(embed=embed)
             else:
                 await interaction.response.send_message('Failed to retrieve Spotify profile.')
+
+        # @self.tree.command(name='callback', description='Handle Spotify callback with code', guild=self.guild)
+        # async def callback(interaction: discord.Interaction, code: str, state: str):
+        #     user_id = state
+        #     token_info = self.sp_oauth.get_access_token(code)
+        #     if 'refresh_token' in token_info:
+        #         token_info['expires_at'] = int(time.time()) + token_info['expires_in']
+        #         save_token(user_id, token_info)  # Save the token to the database
+        #         await interaction.response.send_message("Authentication successful! You can now use Spotify commands.", ephemeral=True)
+        #     else:
+        #         await interaction.response.send_message("Failed to receive all necessary token information from Spotify.", ephemeral=True)
+
+        @self.tree.command(name='playing2', description='Share your currently playing song on Spotify', guild=self.guild)
+        async def playing(interaction: discord.Interaction):
+            user_id = str(interaction.user.id)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if not access_token:
+                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+                return
             
-        @bot.tree.command(name='listening', description='Find who\'s listening to what on the server')
+            sp = spotipy.Spotify(auth=access_token)
+            current_track = sp.current_user_playing_track()
+            if current_track and current_track['item']:
+                track_name = current_track['item']['name']
+                artist_name = current_track['item']['artists'][0]['name']
+                album_cover_url = current_track['item']['album']['images'][0]['url']  # Get the album cover image URL
+                
+                embed = discord.Embed(
+                    title=f"Now playing: {track_name}",
+                    description=f"Artist: {artist_name}",
+                    color=discord.Color.blue()
+                )
+                embed.set_image(url=album_cover_url)
+                
+                await interaction.response.send_message(embed=embed)
+            else:
+                await interaction.response.send_message('No track currently playing.')
+
+
+        @self.tree.command(name='listening', description='Find who\'s listening to what on the server', guild=self.guild)
         async def listening(interaction: discord.Interaction):
             await interaction.response.send_message('This functionality is under development.')
-
-        logger.debug('Synchronizing commands with Discord')
-        await bot.tree.sync(guild=discord.Object(id=discord_guild))
 
     async def get_fresh_token(self, token_info, user_id):
         if token_info and (token_info['expires_at'] - int(time.time()) < 60):
             # Token needs refreshing
             refresh_url = f"http://localhost:8888/refresh_token?refresh_token={token_info['refresh_token']}"
-            # refresh_url = f"https://885e-128-12-122-208.ngrok-free.app/refresh_token?refresh_token={token_info['refresh_token']}"
             response = requests.get(refresh_url)
             if response.status_code == 200:
                 refreshed_token_info = response.json()
