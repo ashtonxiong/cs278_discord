@@ -39,7 +39,7 @@ def login():
     state = generate_random_string(16)
     flask_session['user_id'] = user_id  # Store user ID in session
     flask_session['state'] = state  # Store state in session to verify later
-    scope = 'user-read-private user-read-email user-read-playback-state'
+    scope = 'user-read-private user-read-email user-read-playback-state user-top-read'
     
     auth_url = 'https://accounts.spotify.com/authorize?' + urllib.parse.urlencode({
         'response_type': 'code',

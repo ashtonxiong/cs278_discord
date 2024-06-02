@@ -155,7 +155,7 @@ class ModBot(commands.Bot):
                     self.user_state[message.author.id]['state'] = State.AWAITING_GENRES
                 elif state == State.AWAITING_GENRES:
                     self.user_profiles[message.author.id]['genres'] = message.content
-                    await message.author.send("Who are your favorite artists?")
+                    await message.author.send("Who are your favorite artists right now?")
                     self.user_state[message.author.id]['state'] = State.AWAITING_ARTISTS
                 elif state == State.AWAITING_ARTISTS:
                     self.user_profiles[message.author.id]['artists'] = message.content
@@ -167,18 +167,29 @@ class ModBot(commands.Bot):
                     self.user_state[message.author.id]['state'] = State.AWAITING_EVENTS
                 elif state == State.AWAITING_EVENTS:
                     self.user_profiles[message.author.id]['events'] = message.content
+
+                    profile = self.user_profiles[message.author.id]
+                    # Fetch top songs and artists
+                    token_info = get_token(message.author.id)
+                    if token_info:
+                        access_token = await self.spotify_bot.get_fresh_token(token_info, message.author.id)
+                        if access_token:
+                            top_songs = await self.spotify_bot.get_top_songs(access_token)
+                            top_artists = await self.spotify_bot.get_top_artists(access_token)
+                            self.user_profiles[message.author.id]['top_songs'] = '\n'.join(top_songs)
+                            self.user_profiles[message.author.id]['top_artists'] = '\n'.join(top_artists)
+                    
                     profile = self.user_profiles[message.author.id]
                     reply = "Your music profile has been updated.\n"
-                    reply += f"Name: {profile['name']}\nFavorite Genres: {profile['genres']}\nFavorite Artists: {profile['artists']}\nMost played song right now: {profile['song']}\nUpcoming music events you're attending: {profile['events']}\n\n"
+                    reply += f"**Name:** {profile['name']}\n**Favorite genres:** {profile['genres']}\n**Favorite artists right now:** {profile['artists']}\n**Most played song right now:** {profile['song']}\n**Upcoming music events you're attending:** {profile['events']}\n\n"
+                    reply += f"**Top 5 Songs:**\n{profile['top_songs']}\n\n"
+                    reply += f"**Top 5 Artists:**\n{profile['top_artists']}\n"
+
                     await message.author.send(reply)
                     self.user_state[message.author.id] = {'state': None}
 
-        print('message sent to channel:', message.content) 
-
         response = self.openai_client.moderations.create(input=message.content)
-        print('response:', response)
         output = response.results[0]
-        print('output:', output)
 
         if output.flagged:
             await message.delete()
@@ -277,7 +288,7 @@ class TriviaBot:
 
 class SpotifyBot:
     def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles):
-        self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope="user-read-playback-state user-read-email")
+        self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope="user-read-private user-read-email user-read-playback-state user-top-read")
         self.tree = tree
         self.guild = discord.Object(id=guild_id)
         self.user_profiles = user_profiles
@@ -333,6 +344,8 @@ class SpotifyBot:
                 reply += f"**Favorite Artists:** {profile['artists']}\n"
                 reply += f"**Most played song right now:** {profile['song']}\n"
                 reply += f"**Upcoming music events they're attending:** {profile['events']}\n"
+                reply += f"**Top 5 Songs:**\n{profile['top_songs']}\n"
+                reply += f"**Top 5 Artists:**\n{profile['top_artists']}\n"
                 await interaction.response.send_message(reply)
             else:
                 await interaction.response.send_message('You do not have a music profile yet. Create one by DM\'ing the bot `music`.')
@@ -375,10 +388,129 @@ class SpotifyBot:
             else:
                 await interaction.response.send_message('No track currently playing.')
 
-
-        @self.tree.command(name='listening', description='Find who\'s listening to what on the server', guild=self.guild)
+        # NEEDS TO BE FIXED
+        @self.tree.command(name='listening', description="Find who's listening to what on the server", guild=self.guild)
         async def listening(interaction: discord.Interaction):
-            await interaction.response.send_message('This functionality is under development.')
+            members = interaction.guild.members
+            listening_info = []
+            for member in members:
+                user_id = str(member.id)
+                token_info = get_token(user_id)
+                if token_info:
+                    access_token = await self.get_fresh_token(token_info, user_id)
+                    if access_token:
+                        sp = spotipy.Spotify(auth=access_token)
+                        try:
+                            current_track = sp.current_user_playing_track()
+                            if current_track and current_track['item']:
+                                track_name = current_track['item']['name']
+                                artist_name = current_track['item']['artists'][0]['name']
+                                listening_info.append(f"{member.display_name} is listening to '{track_name}' by {artist_name}")
+                        except spotipy.SpotifyException as e:
+                            print(f"Spotify API error for user {member.display_name}: {e}")
+            if listening_info:
+                reply = "Here's what everyone is listening to right now:\n" + "\n".join(listening_info)
+            else:
+                reply = "No one is currently listening to anything on Spotify or they haven't authenticated."
+            await interaction.response.send_message(reply)
+
+        @self.tree.command(name='recommend', description='Recommend a song, album, or artist to the channel', guild=self.guild)
+        @app_commands.describe(search_type="Type of search: track, album, artist", query="Title of song, album, or artist name")
+        async def search(interaction: discord.Interaction, query: str, search_type: str):
+            user_id = str(interaction.user.id)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if not access_token:
+                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+                return
+            
+            sp = spotipy.Spotify(auth=access_token)
+            results = sp.search(q=query, type=search_type, limit=1)
+            embed = discord.Embed(title=f"Search results for '{query}'", color=discord.Color.blue())
+            
+            if results:
+                if search_type == 'track' and results['tracks']['items']:
+                    track = results['tracks']['items'][0]
+                    track_name = track['name']
+                    artist_name = track['artists'][0]['name']
+                    album_name = track['album']['name']
+                    album_image = track['album']['images'][0]['url'] if track['album']['images'] else None
+                    embed.add_field(name="Top track result", value=f"**Track:** {track_name}\n**Artist:** {artist_name}\n**Album:** {album_name}", inline=False)
+                    if album_image:
+                        embed.set_thumbnail(url=album_image)
+
+                elif search_type == 'album' and results['albums']['items']:
+                    album = results['albums']['items'][0]
+                    album_name = album['name']
+                    artist_name = album['artists'][0]['name']
+                    album_image = album['images'][0]['url'] if album['images'] else None
+                    embed.add_field(name="Top album result", value=f"**Album:** {album_name}\n**Artist:** {artist_name}", inline=False)
+                    if album_image:
+                        embed.set_thumbnail(url=album_image)
+
+                elif search_type == 'artist' and results['artists']['items']:
+                    artist = results['artists']['items'][0]
+                    artist_name = artist['name']
+                    artist_image = artist['images'][0]['url'] if artist['images'] else None
+                    embed.add_field(name="Top artist result", value=f"**Artist:** {artist_name}", inline=False)
+                    if artist_image:
+                        embed.set_thumbnail(url=artist_image)
+
+                else:
+                    embed.add_field(name="No results found", value=f"No results found for {search_type}.", inline=False)
+            else:
+                embed.add_field(name="No results found", value="No results found.", inline=False)
+
+            await interaction.response.send_message(embed=embed)
+
+
+        # @self.tree.command(name='top5songs', description='Share your top 5 songs on Spotify', guild=self.guild)
+        # async def top5songs(interaction: discord.Interaction):
+        #     user_id = str(interaction.user.id)
+        #     token_info = get_token(user_id)  # Retrieve the token from the database
+        #     access_token = await self.get_fresh_token(token_info, user_id)
+        #     if not access_token:
+        #         await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+        #         return
+
+        #     sp = spotipy.Spotify(auth=access_token)
+        #     top_tracks = sp.current_user_top_tracks(limit=5)
+
+        #     if top_tracks and top_tracks['items']:
+        #         top_tracks_list = [f"{idx + 1}. {track['name']} by {track['artists'][0]['name']}" for idx, track in enumerate(top_tracks['items'])]
+        #         reply = f"{interaction.user.display_name}'s top 5 songs on Spotify:\n" + "\n".join(top_tracks_list)
+        #         await interaction.response.send_message(reply)
+        #     else:
+        #         await interaction.response.send_message('Could not retrieve top tracks.')
+
+        # @self.tree.command(name='top5artists', description='Share your top 5 artists on Spotify', guild=self.guild)
+        # async def top5artists(interaction: discord.Interaction):
+        #     user_id = str(interaction.user.id)
+        #     token_info = get_token(user_id)  # Retrieve the token from the database
+        #     access_token = await self.get_fresh_token(token_info, user_id)
+        #     if not access_token:
+        #         await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+        #         return
+
+        #     sp = spotipy.Spotify(auth=access_token)
+        #     top_artists = sp.current_user_top_artists(limit=5)
+
+        #     if top_artists and top_artists['items']:
+        #         top_artists_list = [f"{idx + 1}. {artist['name']}" for idx, artist in enumerate(top_artists['items'])]
+        #         reply = f"{interaction.user.display_name}'s top 5 artists on Spotify:\n" + "\n".join(top_artists_list)
+        #         await interaction.response.send_message(reply)
+        #     else:
+        #         await interaction.response.send_message('Could not retrieve top artists.')
+
+    async def get_top_songs(self, access_token):
+        sp = spotipy.Spotify(auth=access_token)
+        top_tracks = sp.current_user_top_tracks(limit=5)
+        return [f"{track['name']} by {track['artists'][0]['name']}" for track in top_tracks['items']]
+
+    async def get_top_artists(self, access_token):
+        sp = spotipy.Spotify(auth=access_token)
+        top_artists = sp.current_user_top_artists(limit=5)
+        return [artist['name'] for artist in top_artists['items']]
 
     async def get_fresh_token(self, token_info, user_id):
         if token_info and (token_info['expires_at'] - int(time.time()) < 60):
