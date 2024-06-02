@@ -302,7 +302,7 @@ class SpotifyBot:
         self.user_profiles = user_profiles
     
     async def setup_spotify_commands(self):
-        @self.tree.command(name='authenticate_spotify2', description='Authenticate with Spotify', guild=self.guild)
+        @self.tree.command(name='authenticate', description='Authenticate with Spotify', guild=self.guild)
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
             # auth_url = f"http://localhost:8888/login?user_id={user_id}"
@@ -358,7 +358,7 @@ class SpotifyBot:
             else:
                 await interaction.response.send_message('You do not have a music profile yet. Create one by DM\'ing the bot `music`.', ephemeral=True)
 
-        @self.tree.command(name='playing2', description='Share your currently playing song on Spotify', guild=self.guild)
+        @self.tree.command(name='currently_playing', description='Share your currently playing song on Spotify', guild=self.guild)
         async def playing(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
             track_info = await self.fetch_currently_playing(user_id)
@@ -491,9 +491,9 @@ class SpotifyBot:
             except spotipy.exceptions.SpotifyException as e:
                 await interaction.response.send_message(f"Failed to retrieve playlist details: {e}", ephemeral=True)
 
-        @self.tree.command(name='playlistcreate', description="Create a collaborative playlist for the server", guild=self.guild)
+        @self.tree.command(name='playlist_create', description="Create a collaborative playlist for the server", guild=self.guild)
         @app_commands.describe(name="The name of the playlist", description="The description of the playlist")
-        async def playlistcreate(interaction: discord.Interaction, name: str, description: str):
+        async def playlist_create(interaction: discord.Interaction, name: str, description: str):
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
             access_token = await self.get_fresh_token(token_info, user_id)
