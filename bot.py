@@ -288,7 +288,8 @@ class TriviaBot:
 
 class SpotifyBot:
     def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles):
-        self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, scope="user-read-private user-read-email user-read-playback-state user-top-read")
+        self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, 
+                                     scope="user-read-private user-read-email user-read-playback-state user-top-read playlist-modify-public playlist-modify-private")
         self.tree = tree
         self.guild = discord.Object(id=guild_id)
         self.user_profiles = user_profiles
@@ -460,6 +461,56 @@ class SpotifyBot:
                     embed.add_field(name="No results found", value=f"No results found for {search_type}.", inline=False)
             else:
                 embed.add_field(name="No results found", value="No results found.", inline=False)
+
+            await interaction.response.send_message(embed=embed)
+
+        @self.tree.command(name='playlistcreate', description="Create a collaborative playlist for the server", guild=self.guild)
+        @app_commands.describe(name="The name of the playlist", description="The description of the playlist")
+        async def playlistcreate(interaction: discord.Interaction, name: str, description: str):
+            user_id = str(interaction.user.id)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if not access_token:
+                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+                return
+
+            sp = spotipy.Spotify(auth=access_token)
+            user_profile = sp.current_user()
+            playlist = sp.user_playlist_create(user=user_profile['id'], name=name, public=True, description=description)
+            playlist_url = playlist['external_urls']['spotify']
+            await interaction.response.send_message(f"Collaborative playlist created: [Playlist Link]({playlist_url})")
+
+        @self.tree.command(name='playlistadd', description="Add a song to a collaborative playlist", guild=self.guild)
+        @app_commands.describe(playlist_id="The link to the playlist", track_id="The link to the track to add")
+        async def playlistadd(interaction: discord.Interaction, playlist_id: str, track_id: str):
+            user_id = str(interaction.user.id)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if not access_token:
+                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+                return
+
+            sp = spotipy.Spotify(auth=access_token)
+            sp.user_playlist_add_tracks(user=user_id, playlist_id=playlist_id, tracks=[track_id])
+            await interaction.response.send_message("Track added to playlist.")
+
+        # NEEDS TO BE FIXED
+        @self.tree.command(name='playlists', description="Show a list of collaborative playlists", guild=self.guild)
+        async def playlists(interaction: discord.Interaction):
+            user_id = str(interaction.user.id)
+            token_info = get_token(user_id)  # Retrieve the token from the database
+            access_token = await self.get_fresh_token(token_info, user_id)
+            if not access_token:
+                await interaction.response.send_message("Please authenticate with Spotify first using /authenticate_spotify.", ephemeral=True)
+                return
+
+            sp = spotipy.Spotify(auth=access_token)
+            user_playlists = sp.current_user_playlists()
+            embed = discord.Embed(title="Collaborative Playlists", color=discord.Color.purple())
+
+            for playlist in user_playlists['items']:
+                if playlist['owner']['id'] == user_id:  # Assuming the bot owns the playlists
+                    embed.add_field(name=playlist['name'], value=f"[Link]({playlist['external_urls']['spotify']})", inline=False)
 
             await interaction.response.send_message(embed=embed)
 
