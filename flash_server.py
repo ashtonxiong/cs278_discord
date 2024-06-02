@@ -116,28 +116,28 @@ def refresh_token():
 
 
 def save_token(user_id, token_info):
-    existing_token = get_session().query(SpotifyToken).filter_by(user_id=user_id).first()
+    session = get_session()
+    existing_token = session.query(SpotifyToken).filter_by(user_id=user_id).first()
     if existing_token:
-        existing_token.access_token = token_info['access_token']
+        existing_token.access_token = token_info.get('access_token', existing_token.access_token)
         existing_token.refresh_token = token_info.get('refresh_token', existing_token.refresh_token)
-        existing_token.token_type = token_info['token_type']
-        existing_token.expires_in = token_info['expires_in']
-        existing_token.scope = token_info['scope']
-        existing_token.expires_at = token_info['expires_at'] 
+        existing_token.token_type = token_info.get('token_type', existing_token.token_type)
+        existing_token.expires_in = token_info.get('expires_in', existing_token.expires_in)
+        existing_token.scope = token_info.get('scope', existing_token.scope)
+        existing_token.expires_at = token_info.get('expires_at', existing_token.expires_at)
     else:
         new_token = SpotifyToken(
             user_id=user_id,
-            access_token=token_info['access_token'],
-            refresh_token=token_info['refresh_token'],
-            token_type=token_info['token_type'],
-            expires_in=token_info['expires_in'],
-            scope=token_info['scope'],
-            expires_at=token_info['expires_at'] 
+            access_token=token_info.get('access_token'),
+            refresh_token=token_info.get('refresh_token'),
+            token_type=token_info.get('token_type', 'Bearer'),  # Default to 'Bearer' if missing
+            expires_in=token_info.get('expires_in', 3600),  # Default to 1 hour if missing
+            scope=token_info.get('scope', ''),
+            expires_at=token_info.get('expires_at')
         )
-        get_session.add(new_token)
-    get_session().commit()
-    print(f"Token for user {user_id} saved to the database")
-
+        session.add(new_token)
+    session.commit()
+    session.close()
 
 def get_token(user_id):
     session = get_session()  # Call the function to get a session object
