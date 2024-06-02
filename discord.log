@@ -1,28 +1,3 @@
-2024-06-01 00:47:35,380:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
-2024-06-01 00:47:35,391:INFO:discord.client: logging in using static token
-2024-06-01 00:47:36,297:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: b2efa3d0fcf0bd4f40d7457c457d28b0).
-2024-06-01 01:25:25,676:INFO:discord.gateway: Shard ID None session has been invalidated.
-2024-06-01 01:25:31,190:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: 45a840db210d1b7ff4c2df2615edd48f).
-2024-06-01 01:25:33,396:ERROR:discord.client: Ignoring exception in on_ready
-Traceback (most recent call last):
-  File "/Users/ashtonxiong/Desktop/cs278_discord/env/lib/python3.12/site-packages/discord/client.py", line 441, in _run_event
-    await coro(*args, **kwargs)
-  File "/Users/ashtonxiong/Desktop/cs278_discord/bot.py", line 76, in on_ready
-    await self.spotify_bot.setup_spotify_commands(self)
-  File "/Users/ashtonxiong/Desktop/cs278_discord/bot.py", line 202, in setup_spotify_commands
-    @bot.tree.command(name='test', description='test normal command')
-     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/ashtonxiong/Desktop/cs278_discord/env/lib/python3.12/site-packages/discord/app_commands/tree.py", line 896, in decorator
-    self.add_command(command, guild=guild, guilds=guilds)
-  File "/Users/ashtonxiong/Desktop/cs278_discord/env/lib/python3.12/site-packages/discord/app_commands/tree.py", line 373, in add_command
-    raise CommandAlreadyRegistered(name, None)
-discord.app_commands.errors.CommandAlreadyRegistered: Command 'test' already registered.
-2024-06-01 01:27:02,212:ERROR:discord.client: Attempting a reconnect in 1.88s
-Traceback (most recent call last):
-  File "/Users/ashtonxiong/Desktop/cs278_discord/env/lib/python3.12/site-packages/discord/client.py", line 659, in connect
-    await self.ws.poll_event()
-  File "/Users/ashtonxiong/Desktop/cs278_discord/env/lib/python3.12/site-packages/discord/gateway.py", line 646, in poll_event
-    raise ConnectionClosed(self.socket, shard_id=self.shard_id, code=code) from None
-discord.errors.ConnectionClosed: Shard ID None WebSocket closed with 1000
-2024-06-01 01:27:04,326:INFO:discord.gateway: Shard ID None has successfully RESUMED session 45a840db210d1b7ff4c2df2615edd48f.
-2024-06-01 01:28:48,053:INFO:discord.gateway: Shard ID None has successfully RESUMED session 45a840db210d1b7ff4c2df2615edd48f.
+2024-06-01 02:24:14,126:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
+2024-06-01 02:24:14,136:INFO:discord.client: logging in using static token
+2024-06-01 02:24:14,938:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: b8bb4f8f93fa8e8245570d8313d8074c).

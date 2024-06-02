@@ -16,6 +16,10 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 import time
 
+from discord import interactions
+
+
+
 # Set up logging to the console
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
@@ -36,6 +40,10 @@ with open(token_path) as f:
     spotify_client_secret = tokens['spotify_client_secret']
     spotify_redirect_uri = tokens['spotify_redirect_uri']
 
+bot = interactions.Client(token=discord_token)
+
+
+
 class State(Enum):
     MOD_START = auto()
     AWAITING_MORE = auto()
@@ -48,17 +56,18 @@ class ModBot(commands.Bot):
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.user_state = {}
         self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri)
+        self.spotify_bot.setup_spotify_commands(self)
         # self.tree = app_commands.CommandTree(self)
 
 
-    async def setup_hook(self):
-        self.tree.copy_global_to(guild=discord.Object(id=discord_guild))
-        await self.tree.sync(guild=discord.Object(id=discord_guild))
+    # async def setup_hook(self):
+        # self.tree.copy_global_to(guild=discord.Object(id=discord_guild))
+        # await self.tree.sync(guild=discord.Object(id=discord_guild))
 
 
     async def on_ready(self):
         # Moved from setup_hook
-        await self.tree.sync(guild=discord.Object(id=discord_guild))  
+        # await self.tree.sync(guild=discord.Object(id=discord_guild))  
 
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
         for guild in self.guilds:
@@ -202,7 +211,7 @@ class SpotifyBot:
         @bot.tree.command(name='test', description='test normal command')
         async def hello(interaction: discord.Interaction):
             print("test /test command")
-            await interaction.response.send_message('Hello')
+            await interaction.response.send_message('Hello', ephemeral=True)
 
         @bot.tree.command(name='authenticate_spotify', description='Authenticate with Spotify')
         async def authenticate_spotify(interaction: discord.Interaction):
@@ -225,6 +234,7 @@ class SpotifyBot:
 
         @bot.tree.command(name='playing', description='Get the currently playing song on Spotify')
         async def playing(interaction: discord.Interaction):
+            print("in playing")
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
             access_token = await self.get_fresh_token(token_info, user_id)
@@ -287,7 +297,7 @@ class SpotifyBot:
             await interaction.response.send_message('This functionality is under development.')
 
         logger.debug('Synchronizing commands with Discord')
-        await bot.tree.sync(guild=discord.Object(id=discord_guild))
+        # await bot.tree.sync(guild=discord.Object(id=discord_guild))
 
     async def get_fresh_token(self, token_info, user_id):
         if token_info and (token_info['expires_at'] - int(time.time()) < 60):
