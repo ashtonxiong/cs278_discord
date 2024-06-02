@@ -1,3 +1,3 @@
-2024-06-01 21:24:49,018:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
-2024-06-01 21:24:49,047:INFO:discord.client: logging in using static token
-2024-06-01 21:24:50,065:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: 598af0049e662b9a225ffea9f64f8587).
+2024-06-01 22:49:09,243:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
+2024-06-01 22:49:09,286:INFO:discord.client: logging in using static token
+2024-06-01 22:49:10,271:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: 604aca8f911949990a200b63aaa8552f).
