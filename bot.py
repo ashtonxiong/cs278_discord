@@ -493,7 +493,7 @@ class SpotifyBot:
             await interaction.response.send_message(embed=embed)
 
         @self.tree.command(name='discover', description='Discover new music with AI recommendations', guild=self.guild)
-        @app_commands.describe(search_type="Type of search: Song, Album, Artist, New")
+        @app_commands.describe(search_type="Type of search: Song, Album, Artist, Random")
         async def discover_music(interaction: discord.Interaction, search_type: str):
             user_id = interaction.user.id
             profile_info = get_music_profile(user_id)
@@ -503,13 +503,14 @@ class SpotifyBot:
             # Defer the interaction response to get more time
             await interaction.response.defer()
 
-            if search_type.lower() == "new":
+            if search_type.lower() == "random":
                 try:
                     response = self.openai_client.chat.completions.create(
                         model="gpt-4",
                         messages=[
-                            {"role": "system", "content": "You are a music recommendation algorithm. Your task is to recommend a random song from any random genres and decades. Please make it as random as possible, I don't want the possibility of a duplicate song. It can be from any song the past 10 years or a song from the past 30 years."},
-                            {"role": "user", "content": "Please recommend a random song. It can be from any genre and any decade. i don't want the possibility of a repeated song"}
+                            {"role": "system", "content": "You are a music recommendation algorithm. Your task is to recommend a random song from any genre. Do not limit your recommendation to a single genre."},
+                            {"role": "user", "content": "Recommend a song from any genre, culture, country, decade, time period, etc. Do not limit yourself to a single genre of songs. Please include musical diversity, but do not repeat recommended songs."},
+                            {"role": "user", "content": "Please recommend a random song. It can be from any genre and any decade. I don't want the possibility of a repeated song. I want all different recommendations. Do not include Bohemian Rapsody."}
                         ])
                     print("Test response:", response.choices[0].message.content)
                     if response.choices:
@@ -533,7 +534,7 @@ class SpotifyBot:
                 response = self.openai_client.chat.completions.create(
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": f'Recommend a music song, artist, or album recommendation with this information: {recommendation_info}'},
+                        {"role": "system", "content": f'Recommend a song, artist, or album recommendation with this information: {recommendation_info}'},
                         {"role": "user", "content": "Recommend a single song or artist based on the information given."}
                     ])
                 print("Test response:", response.choices[0].message.content)
