@@ -41,6 +41,8 @@ with open(token_path) as f:
     spotify_client_secret = tokens['spotify_client_secret']
     spotify_redirect_uri = tokens['spotify_redirect_uri']
 
+
+
 class State(Enum):
     REPORT_START = auto()
     ADDING_DETAILS = auto()
@@ -490,35 +492,6 @@ class SpotifyBot:
 
             await interaction.response.send_message(embed=embed)
 
-        # @self.tree.command(name='currently_playing', description='Share your currently playing song on Spotify', guild=self.guild)
-        # async def playing(interaction: discord.Interaction):
-
-        # @self.tree.command(name='discover', description='Discover new music with AI recommendations', guild=self.guild)
-        # async def discover_music(interaction: discord.Interaction):
-        #     user_id = interaction.user.id
-        #     profile_info = get_music_profile(user_id)
-        #     print(profile_info.top_songs)
-            
-        #     try:
-        #         response = self.openai_client.chat.completions.create(
-        #             model="gpt-3.5-turbo",
-        #             messages=[
-        #                 {"role": "system", "content": f'Generate a music song recommendation with this information: ${profile_info.top_songs}'},
-        #                 {"role": "user", "content": "Generate a song recommendation"}
-        #             ])
-        #         print("Test response:", response.choices[0].message.content)
-        #         if response:
-        #             await interaction.response.send_message(f"AI Recommendations:\n{response.choices[0].message.content}")
-
-
-        #         else:
-        #             print("No valid response received from OpenAI.")
-        #             await interaction.response.send_message("Failed to generate recommendations. Please try again later.")
-        #     except Exception as e:
-        #         print(f"Failed to generate trivia prompt: {e}")
-        #         await interaction.response.send_message(f"Error occurred: {e}")
-        #         return None, None, None
-
         @self.tree.command(name='discover', description='Discover new music with AI recommendations', guild=self.guild)
         @app_commands.describe(search_type="Type of search: Song, Album, Artist, New")
         async def discover_music(interaction: discord.Interaction, search_type: str):
@@ -535,8 +508,8 @@ class SpotifyBot:
                     response = self.openai_client.chat.completions.create(
                         model="gpt-4",
                         messages=[
-                            {"role": "system", "content": "You are a music recommendation assistant. Your task is to recommend random songs from various genres and decades."},
-                            {"role": "user", "content": "Please recommend a random song and artist. It can be from any genre and any decade."}
+                            {"role": "system", "content": "You are a music recommendation algorithm. Your task is to recommend a random song from any random genres and decades. Please make it as random as possible, I don't want the possibility of a duplicate song. It can be from any song the past 10 years or a song from the past 30 years."},
+                            {"role": "user", "content": "Please recommend a random song. It can be from any genre and any decade. i don't want the possibility of a repeated song"}
                         ])
                     print("Test response:", response.choices[0].message.content)
                     if response.choices:
@@ -560,8 +533,8 @@ class SpotifyBot:
                 response = self.openai_client.chat.completions.create(
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": f'Generate a music song, artist, or album recommendation with this information: {recommendation_info}'},
-                        {"role": "user", "content": "Generate a song, artist, or album recommendation"}
+                        {"role": "system", "content": f'Recommend a music song, artist, or album recommendation with this information: {recommendation_info}'},
+                        {"role": "user", "content": "Recommend a single song or artist based on the information given."}
                     ])
                 print("Test response:", response.choices[0].message.content)
                 if response.choices:
@@ -572,9 +545,6 @@ class SpotifyBot:
             except Exception as e:
                 print(f"Failed to generate trivia prompt: {e}")
                 await interaction.followup.send(f"Error occurred: {e}")
-
-
-
 
 
         @self.tree.command(name='share_playlist', description="Share one of your Spotify playlists", guild=self.guild)
