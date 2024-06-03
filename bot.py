@@ -493,34 +493,86 @@ class SpotifyBot:
         # @self.tree.command(name='currently_playing', description='Share your currently playing song on Spotify', guild=self.guild)
         # async def playing(interaction: discord.Interaction):
 
+        # @self.tree.command(name='discover', description='Discover new music with AI recommendations', guild=self.guild)
+        # async def discover_music(interaction: discord.Interaction):
+        #     user_id = interaction.user.id
+        #     profile_info = get_music_profile(user_id)
+        #     print(profile_info.top_songs)
+            
+        #     try:
+        #         response = self.openai_client.chat.completions.create(
+        #             model="gpt-3.5-turbo",
+        #             messages=[
+        #                 {"role": "system", "content": f'Generate a music song recommendation with this information: ${profile_info.top_songs}'},
+        #                 {"role": "user", "content": "Generate a song recommendation"}
+        #             ])
+        #         print("Test response:", response.choices[0].message.content)
+        #         if response:
+        #             await interaction.response.send_message(f"AI Recommendations:\n{response.choices[0].message.content}")
+
+
+        #         else:
+        #             print("No valid response received from OpenAI.")
+        #             await interaction.response.send_message("Failed to generate recommendations. Please try again later.")
+        #     except Exception as e:
+        #         print(f"Failed to generate trivia prompt: {e}")
+        #         await interaction.response.send_message(f"Error occurred: {e}")
+        #         return None, None, None
+
         @self.tree.command(name='discover', description='Discover new music with AI recommendations', guild=self.guild)
-        async def discover_music(interaction: discord.Interaction):
+        @app_commands.describe(search_type="Type of search: Song, Album, Artist, New")
+        async def discover_music(interaction: discord.Interaction, search_type: str):
             user_id = interaction.user.id
             profile_info = get_music_profile(user_id)
-            print(profile_info.top_songs)
-            
+            print("Profile Info", profile_info.top_songs)
+            recommendation_info = []
+
+            # Defer the interaction response to get more time
+            await interaction.response.defer()
+
+            if search_type.lower() == "new":
+                try:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": "You are a music recommendation assistant. Your task is to recommend random songs from various genres and decades."},
+                            {"role": "user", "content": "Please recommend a random song and artist. It can be from any genre and any decade."}
+                        ])
+                    print("Test response:", response.choices[0].message.content)
+                    if response.choices:
+                        await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
+                    else:
+                        print("No valid response received from OpenAI.")
+                        await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+                except Exception as e:
+                    print(f"Failed to generate trivia prompt: {e}")
+                    await interaction.followup.send(f"Error occurred: {e}")
+                return
+
+            if search_type.lower() == "song":
+                recommendation_info = profile_info.top_songs
+            elif search_type.lower() == "artist":
+                recommendation_info = profile_info.top_artists
+            elif search_type.lower() == "album":
+                recommendation_info = profile_info.top_songs  # Placeholder, should be updated with albums
+
             try:
                 response = self.openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4",
                     messages=[
-                        {"role": "system", "content": f'Generate a music song recommendation with this information: ${profile_info.top_songs}'},
-                        {"role": "user", "content": "Generate a song recommendation"}
+                        {"role": "system", "content": f'Generate a music song, artist, or album recommendation with this information: {recommendation_info}'},
+                        {"role": "user", "content": "Generate a song, artist, or album recommendation"}
                     ])
                 print("Test response:", response.choices[0].message.content)
-                if response:
-                    await interaction.response.send_message(f"AI Recommendations:\n{response.choices[0].message.content}")
-
-                # if 'choices' in response and len(response['choices']) > 0:
-                #     message_content = response['choices'][0]['message']['content'].strip()
-                #     print("Generated message content:", message_content)
-                #     await interaction.response.send_message(f"AI Recommendations:\n{message_content}")
+                if response.choices:
+                    await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
                 else:
                     print("No valid response received from OpenAI.")
-                    await interaction.response.send_message("Failed to generate recommendations. Please try again later.")
+                    await interaction.followup.send("Failed to generate recommendations. Please try again later.")
             except Exception as e:
                 print(f"Failed to generate trivia prompt: {e}")
-                await interaction.response.send_message(f"Error occurred: {e}")
-                return None, None, None
+                await interaction.followup.send(f"Error occurred: {e}")
+
 
 
 
