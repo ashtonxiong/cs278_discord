@@ -68,7 +68,7 @@ class ModBot(commands.Bot):
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.user_state = {}  # Store states for bot DM interactions
         self.user_profiles = {}  # Store music profiles
-        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri, self.tree, discord_guild, self.user_profiles)
+        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri, self.tree, discord_guild, self.user_profiles, self.openai_client)
 
     async def setup_hook(self):
         await self.spotify_bot.setup_spotify_commands()
@@ -326,19 +326,21 @@ class DailyTuneInBot:
 
 
 class SpotifyBot:
-    def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles):
+    def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles, openai_client):
         self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, 
                                      scope="user-read-private user-read-email user-read-playback-state user-top-read playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private")
         self.tree = tree
         self.guild = discord.Object(id=guild_id)
         self.user_profiles = user_profiles
+        self.openai_client = openai_client
+
     
     async def setup_spotify_commands(self):
         @self.tree.command(name='authenticate', description='Authenticate with Spotify', guild=self.guild)
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            # auth_url = f"http://localhost:8888/login?user_id={user_id}"
-            auth_url = f"https://771f-128-12-123-153.ngrok-free.app/login?user_id={user_id}"
+            auth_url = f"http://localhost:8888/login?user_id={user_id}"
+            # auth_url = f"https://771f-128-12-123-153.ngrok-free.app/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @self.tree.command(name='spotify_profile', description='Share your Spotify profile', guild=self.guild)
@@ -487,6 +489,41 @@ class SpotifyBot:
                 embed.add_field(name="No results found", value="No results found.", inline=False)
 
             await interaction.response.send_message(embed=embed)
+
+        # @self.tree.command(name='currently_playing', description='Share your currently playing song on Spotify', guild=self.guild)
+        # async def playing(interaction: discord.Interaction):
+
+        @self.tree.command(name='discover', description='Discover new music with AI recommendations', guild=self.guild)
+        async def discover_music(interaction: discord.Interaction):
+            user_id = interaction.user.id
+            profile_info = get_music_profile(user_id)
+            print(profile_info.top_songs)
+            
+            try:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": f'Generate a music song recommendation with this information: ${profile_info.top_songs}'},
+                        {"role": "user", "content": "Generate a song recommendation"}
+                    ])
+                print("Test response:", response.choices[0].message.content)
+                if response:
+                    await interaction.response.send_message(f"AI Recommendations:\n{response.choices[0].message.content}")
+
+                # if 'choices' in response and len(response['choices']) > 0:
+                #     message_content = response['choices'][0]['message']['content'].strip()
+                #     print("Generated message content:", message_content)
+                #     await interaction.response.send_message(f"AI Recommendations:\n{message_content}")
+                else:
+                    print("No valid response received from OpenAI.")
+                    await interaction.response.send_message("Failed to generate recommendations. Please try again later.")
+            except Exception as e:
+                print(f"Failed to generate trivia prompt: {e}")
+                await interaction.response.send_message(f"Error occurred: {e}")
+                return None, None, None
+
+
+
 
         @self.tree.command(name='share_playlist', description="Share one of your Spotify playlists", guild=self.guild)
         @app_commands.describe(playlist_name="The name of the playlist you want to share")
