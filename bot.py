@@ -525,27 +525,61 @@ class SpotifyBot:
 
             if search_type.lower() == "song":
                 recommendation_info = profile_info.top_songs
+                try:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": f'Recommend a song that is similar with the given songs in this information: {recommendation_info}'},
+                            {"role": "user", "content": "Recommend a single song based on the information given."}
+                        ])
+                    print("Test response:", response.choices[0].message.content)
+                    if response.choices:
+                        await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
+                    else:
+                        print("No valid response received from OpenAI.")
+                        await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+                except Exception as e:
+                    print(f"Failed to generate trivia prompt: {e}")
+                    await interaction.followup.send(f"Error occurred: {e}")
+                return
             elif search_type.lower() == "artist":
                 recommendation_info = profile_info.top_artists
+                try:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": f'Recommend an artist that produces similar music to any one of these songs: {recommendation_info}'},
+                            {"role": "user", "content": "Recommend an artist based on the information given."}
+                        ])
+                    print("Test response:", response.choices[0].message.content)
+                    if response.choices:
+                        await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
+                    else:
+                        print("No valid response received from OpenAI.")
+                        await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+                except Exception as e:
+                    print(f"Failed to generate trivia prompt: {e}")
+                    await interaction.followup.send(f"Error occurred: {e}")
+                return
             elif search_type.lower() == "album":
                 recommendation_info = profile_info.top_songs  # Placeholder, should be updated with albums
-
-            try:
-                response = self.openai_client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": f'Recommend a song, artist, or album recommendation with this information: {recommendation_info}'},
-                        {"role": "user", "content": "Recommend a single song or artist based on the information given."}
-                    ])
-                print("Test response:", response.choices[0].message.content)
-                if response.choices:
-                    await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
-                else:
-                    print("No valid response received from OpenAI.")
-                    await interaction.followup.send("Failed to generate recommendations. Please try again later.")
-            except Exception as e:
-                print(f"Failed to generate trivia prompt: {e}")
-                await interaction.followup.send(f"Error occurred: {e}")
+                try:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": f'Analyze the albums that these songs come from in the information, recommend an album siimlar to the the albums these songs come from: {recommendation_info}'},
+                            {"role": "user", "content": "Recommend an album based on the information given."}
+                        ])
+                    print("Test response:", response.choices[0].message.content)
+                    if response.choices:
+                        await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
+                    else:
+                        print("No valid response received from OpenAI.")
+                        await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+                except Exception as e:
+                    print(f"Failed to generate trivia prompt: {e}")
+                    await interaction.followup.send(f"Error occurred: {e}")
+                return
 
 
         @self.tree.command(name='share_playlist', description="Share one of your Spotify playlists", guild=self.guild)
