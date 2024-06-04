@@ -342,7 +342,7 @@ class SpotifyBot:
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
             auth_url = f"http://localhost:8888/login?user_id={user_id}"
-            # auth_url = f"https://771f-128-12-123-153.ngrok-free.app/login?user_id={user_id}"
+            # auth_url = f"https://4d34-128-12-123-189.ngrok-free.app/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @self.tree.command(name='spotify_profile', description='Share your Spotify profile', guild=self.guild)
@@ -710,7 +710,7 @@ class SpotifyBot:
                 await interaction.response.send_message(f"Failed to create playlist: {e}", ephemeral=True)
 
         @self.tree.command(name='playlist_add', description="Add a song to a collaborative playlist", guild=self.guild)
-        @app_commands.describe(playlist_name="The name of the playlist", track_id="The ID of the track to add")
+        @app_commands.describe(playlist_name="The name of the playlist", track_id="The link of the track to add")
         async def playlist_add(interaction: discord.Interaction, playlist_name: str, track_id: str):
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
