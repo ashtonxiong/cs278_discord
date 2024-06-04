@@ -53,6 +53,18 @@ class MusicProfile(Base):
 
     def __repr__(self):
         return f"<MusicProfile(user_id='{self.user_id}', name='{self.name}')>"
+    
+class Recommendation(Base):
+    __tablename__ = 'recommendations'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, nullable=False)
+    recommendation_type = Column(String, nullable=False)  # song, album, artist
+    recommendation = Column(String, nullable=False)  # The name of the recommended item
+
+    def __repr__(self):
+        return f"<Recommendation(user_id='{self.user_id}', recommendation_type='{self.recommendation_type}', recommendation='{self.recommendation}')>"
+
+
 
 def add_playlist_to_db(playlist_id, name, description, playlist_url, user_id):
     session = get_session()
@@ -124,3 +136,34 @@ def get_music_profile(user_id):
         return None
     finally:
         session.close()
+        
+def add_recommendation(user_id, recommendation_type, recommendation):
+    session = get_session()
+    try:
+        new_recommendation = Recommendation(
+            user_id=user_id,
+            recommendation_type=recommendation_type,
+            recommendation=recommendation
+        )
+        session.add(new_recommendation)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Error adding recommendation to DB: {e}")
+    finally:
+        session.close()
+
+def get_recommendations(user_id, recommendation_type):
+    session = get_session()
+    try:
+        recommendations = session.query(Recommendation).filter_by(user_id=user_id, recommendation_type=recommendation_type).all()
+        return [rec.recommendation for rec in recommendations]
+    except Exception as e:
+        print(f"Error fetching recommendations from DB: {e}")
+        return []
+    finally:
+        session.close()
+
+def initialize_database():
+    engine = create_engine('sqlite:///spotify_tokens.db')
+    Base.metadata.create_all(engine)
