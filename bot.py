@@ -19,7 +19,7 @@ import time
 from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from database_setup import Base, SpotifyToken, add_playlist_to_db, fetch_all_playlists_from_db, save_music_profile, get_music_profile
+from database_setup import Base, SpotifyToken, add_playlist_to_db, fetch_all_playlists_from_db, save_music_profile, get_music_profile, add_recommendation, get_recommendations, initialize_database
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -40,6 +40,8 @@ with open(token_path) as f:
     spotify_client_id = tokens['spotify_client_id']
     spotify_client_secret = tokens['spotify_client_secret']
     spotify_redirect_uri = tokens['spotify_redirect_uri']
+
+
 
 class State(Enum):
     REPORT_START = auto()
@@ -68,7 +70,7 @@ class ModBot(commands.Bot):
         self.openai_client = openai.OpenAI(api_key=openai_api_key)
         self.user_state = {}  # Store states for bot DM interactions
         self.user_profiles = {}  # Store music profiles
-        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri, self.tree, discord_guild, self.user_profiles)
+        self.spotify_bot = SpotifyBot(spotify_client_id, spotify_client_secret, spotify_redirect_uri, self.tree, discord_guild, self.user_profiles, self.openai_client)
 
     async def setup_hook(self):
         await self.spotify_bot.setup_spotify_commands()
@@ -326,19 +328,21 @@ class DailyTuneInBot:
 
 
 class SpotifyBot:
-    def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles):
+    def __init__(self, client_id, client_secret, redirect_uri, tree, guild_id, user_profiles, openai_client):
         self.sp_oauth = SpotifyOAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri, 
                                      scope="user-read-private user-read-email user-read-playback-state user-top-read playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private")
         self.tree = tree
         self.guild = discord.Object(id=guild_id)
         self.user_profiles = user_profiles
+        self.openai_client = openai_client
+
     
     async def setup_spotify_commands(self):
         @self.tree.command(name='authenticate', description='Authenticate with Spotify', guild=self.guild)
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            # auth_url = f"http://localhost:8888/login?user_id={user_id}"
-            auth_url = f"https://771f-128-12-123-153.ngrok-free.app/login?user_id={user_id}"
+            auth_url = f"http://localhost:8888/login?user_id={user_id}"
+            # auth_url = f"https://771f-128-12-123-153.ngrok-free.app/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @self.tree.command(name='spotify_profile', description='Share your Spotify profile', guild=self.guild)
@@ -487,6 +491,158 @@ class SpotifyBot:
                 embed.add_field(name="No results found", value="No results found.", inline=False)
 
             await interaction.response.send_message(embed=embed)
+
+        # @self.tree.command(name='discover', description='Discover new music with AI recommendations', guild=self.guild)
+        # @app_commands.describe(search_type="Type of search: Song, Album, Artist, Random")
+        # async def discover_music(interaction: discord.Interaction, search_type: str):
+        #     user_id = interaction.user.id
+        #     profile_info = get_music_profile(user_id)
+        #     print("Profile Info", profile_info.top_songs)
+        #     recommendation_info = []
+
+        #     # Defer the interaction response to get more time
+        #     await interaction.response.defer()
+
+        #     if search_type.lower() == "random":
+        #         try:
+        #             response = self.openai_client.chat.completions.create(
+        #                 model="gpt-4",
+        #                 messages=[
+        #                     {"role": "system", "content": "You are a music recommendation algorithm. Your task is to recommend a random song from any genre. Do not limit your recommendation to a single genre."},
+        #                     {"role": "user", "content": "Recommend a song from any genre, culture, country, decade, time period, etc. Do not limit yourself to a single genre of songs. Please include musical diversity, but do not repeat recommended songs."},
+        #                     {"role": "user", "content": "Please recommend a random song. It can be from any genre and any decade. I don't want the possibility of a repeated song. I want all different recommendations. Do not include Bohemian Rapsody."}
+        #                 ])
+        #             print("Test response:", response.choices[0].message.content)
+        #             if response.choices:
+        #                 await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
+        #             else:
+        #                 print("No valid response received from OpenAI.")
+        #                 await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+        #         except Exception as e:
+        #             print(f"Failed to generate trivia prompt: {e}")
+        #             await interaction.followup.send(f"Error occurred: {e}")
+        #         return
+
+        #     elif search_type.lower() == "song":
+        #         recommendation_info = profile_info.top_songs
+        #         try:
+        #             response = self.openai_client.chat.completions.create(
+        #                 model="gpt-4",
+        #                 messages=[
+        #                     {"role": "system", "content": f'Recommend a song that is similar with the given songs in this information: {recommendation_info}'},
+        #                     {"role": "user", "content": "Recommend a single song based on the information given."}
+        #                 ])
+        #             print("Test response:", response.choices[0].message.content)
+        #             if response.choices:
+        #                 await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
+        #             else:
+        #                 print("No valid response received from OpenAI.")
+        #                 await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+        #         except Exception as e:
+        #             print(f"Failed to generate trivia prompt: {e}")
+        #             await interaction.followup.send(f"Error occurred: {e}")
+        #         return
+        #     elif search_type.lower() == "artist":
+        #         recommendation_info = profile_info.top_artists
+        #         try:
+        #             response = self.openai_client.chat.completions.create(
+        #                 model="gpt-4",
+        #                 messages=[
+        #                     {"role": "system", "content": f'Recommend an artist that produces similar music to any one of these songs: {recommendation_info}'},
+        #                     {"role": "user", "content": "Recommend an artist based on the information given."}
+        #                 ])
+        #             print("Test response:", response.choices[0].message.content)
+        #             if response.choices:
+        #                 await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
+        #             else:
+        #                 print("No valid response received from OpenAI.")
+        #                 await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+        #         except Exception as e:
+        #             print(f"Failed to generate trivia prompt: {e}")
+        #             await interaction.followup.send(f"Error occurred: {e}")
+        #         return
+        #     elif search_type.lower() == "album":
+        #         recommendation_info = profile_info.top_songs  # Placeholder, should be updated with albums
+        #         try:
+        #             response = self.openai_client.chat.completions.create(
+        #                 model="gpt-4",
+        #                 messages=[
+        #                     {"role": "system", "content": f'Analyze the albums that these songs come from in the information, recommend an album siimlar to the the albums these songs come from: {recommendation_info}'},
+        #                     {"role": "user", "content": "Recommend an album based on the information given."}
+        #                 ])
+        #             print("Test response:", response.choices[0].message.content)
+        #             if response.choices:
+        #                 await interaction.followup.send(f"AI Recommendations:\n{response.choices[0].message.content}")
+        #             else:
+        #                 print("No valid response received from OpenAI.")
+        #                 await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+        #         except Exception as e:
+        #             print(f"Failed to generate trivia prompt: {e}")
+        #             await interaction.followup.send(f"Error occurred: {e}")
+        #         return
+
+        @self.tree.command(name='discover', description='Discover new music with AI recommendations', guild=self.guild)
+        @app_commands.describe(search_type="Type of search: Song, Album, Artist, Random")
+        async def discover_music(interaction: discord.Interaction, search_type: str):
+            user_id = str(interaction.user.id)
+            profile_info = get_music_profile(user_id)
+            
+            if not profile_info:
+                await interaction.response.send_message("You do not have a music profile yet. Create one by DM'ing the bot `music`.", ephemeral=True)
+                return
+
+            # Defer the interaction response to get more time
+            await interaction.response.defer()
+
+            previous_recommendations = get_recommendations(user_id, search_type.lower())
+            print('previous recommendations:', previous_recommendations)
+            recommendation_info = profile_info.top_songs if search_type.lower() == "song" else profile_info.top_artists
+
+            if search_type.lower() == "random":
+                try:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": "You are a music recommendation algorithm. Your task is to recommend a random song from any genre. Do not limit your recommendation to a single genre."},
+                            {"role": "user", "content": "Recommend a song from any genre, culture, country, decade, time period, etc. Do not limit yourself to a single genre of songs. Please include musical diversity, but do not repeat recommended songs."},
+                            {"role": "user", "content": f"Do not recommend any songs already recommended, including: {previous_recommendations}. Please recommend a random song. It can be from any genre and any decade. I want all different recommendation. Again, do not repeat recommended songs."}
+                        ])
+                    if response.choices:
+                        new_recommendation = response.choices[0].message.content.strip()
+                        print('recommendation added to table:', new_recommendation)
+                        await interaction.followup.send(f"AI Recommendations:\n{new_recommendation}")
+                        add_recommendation(user_id, 'random', new_recommendation)
+                    else:
+                        await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+                except Exception as e:
+                    await interaction.followup.send(f"Error occurred: {e}")
+                return
+
+            if search_type.lower() == "song":
+                recommendation_info = profile_info.top_songs
+            elif search_type.lower() == "artist":
+                recommendation_info = profile_info.top_artists
+            elif search_type.lower() == "album":
+                recommendation_info = profile_info.top_songs  # Placeholder, should be updated with albums
+
+            try:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": f'Recommend a {search_type.lower()} that is similar to the given {search_type.lower()}s in this information: {recommendation_info}'},
+                        {"role": "user", "content": f"Recommend a {search_type.lower()} based on the information given. Do not repeat these recommendations: {previous_recommendations}"}
+                    ])
+                if response.choices:
+                    new_recommendation = response.choices[0].message.content.strip()
+                    await interaction.followup.send(f"AI Recommendations:\n{new_recommendation}")
+                    add_recommendation(user_id, search_type.lower(), new_recommendation)
+                    print('recommendation added to table:', new_recommendation)
+                else:
+                    await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+            except Exception as e:
+                await interaction.followup.send(f"Error occurred: {e}")
+
+
 
         @self.tree.command(name='share_playlist', description="Share one of your Spotify playlists", guild=self.guild)
         @app_commands.describe(playlist_name="The name of the playlist you want to share")
@@ -693,6 +849,6 @@ class SpotifyBot:
         return token_info.access_token if token_info else None
 
 
-        
+
 client = ModBot()
 client.run(discord_token)
