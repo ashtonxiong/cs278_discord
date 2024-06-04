@@ -1,2 +1,6 @@
 env
 discord.log
+env/
+config/
+__pycache__
+tokens.json
