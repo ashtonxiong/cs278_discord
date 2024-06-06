@@ -785,7 +785,7 @@ class SpotifyBot:
                 await interaction.response.send_message(f"Failed to create playlist: {e}", ephemeral=True)
 
         @self.tree.command(name='playlist_add', description="Add a song to a collaborative playlist", guild=self.guild)
-        @app_commands.describe(playlist_name="The name of the playlist", track_id="The ID of the track to add")
+        @app_commands.describe(playlist_name="The name of the playlist", track_id="The link of the track to add")
         async def playlist_add(interaction: discord.Interaction, playlist_name: str, track_id: str):
             user_id = str(interaction.user.id)
             token_info = get_token(user_id)  # Retrieve the token from the database
