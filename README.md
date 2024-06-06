@@ -1,5 +1,5 @@
 # TuneIn
-TuneIn is a group project created by Diego Duran, Katie Littleton, Asia Rinehart, Ashton Xiong, and Jailia Yang
+TuneIn is a group project created by Diego Duran, Katie Littleton, Asia Rinehart, Ashton Xiong, and Jailia Yang for CS 278: Social Computing, Spring 2024 at Stanford University.
 
 ## Link to TuneIn's Website
 https://pike-decagon-tnz6.squarespace.com (if prompted to input a password, the password is 'cs278')
