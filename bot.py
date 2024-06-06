@@ -185,6 +185,8 @@ class ModBot(commands.Bot):
                     self.user_profiles[message.author.id]['events'] = message.content
 
                     profile = self.user_profiles[message.author.id]
+                    profile.setdefault('top_songs', [])
+                    profile.setdefault('top_artists', [])
                     # Fetch top songs and artists
                     token_info = get_token(message.author.id)
                     if token_info:
@@ -268,41 +270,108 @@ class TriviaBot:
         else:
             return None
 
+    # async def start(self):
+    #     while True:
+    #         now = datetime.now(pytz.timezone(self.timezone))
+    #         print(now)
+    #         next_run = now.replace(hour=12, minute=0, second=0, microsecond=0)
+    #         print(next_run)
+    #         if now >= next_run:
+    #             next_run += timedelta(days=1)
+    #             print("new next run", next_run)
+    #         wait_seconds = (next_run - now).total_seconds()
+    #         print(f"Waiting {wait_seconds} seconds until the next message at 12:00 PM {self.timezone}.")
+    #         await asyncio.sleep(wait_seconds)
+
+    #         question, options, correct_answer_letter = await self.generate_trivia_prompt()
+    #         if question and options and correct_answer_letter and self.channel:
+    #             await self.unpin_messages()
+
+    #             message = f"@everyone It's trivia time! 🎉\n`{question}`\n"
+    #             message += "\nReact with 🎹 for A\nReact with 🎧 for B\nReact with 🎸 for C\nReact with 🎵 for D."
+    #             sent_message = await self.channel.send(message)
+    #             emojis = {'A': '🎹', 'B': '🎧', 'C': '🎸', 'D': '🎵'}
+    #             for option in options:
+    #                 emoji = emojis[option.strip()[0]]
+    #                 await sent_message.add_reaction(emoji)
+
+    #             await sent_message.pin()
+    #             thread = await sent_message.create_thread(name="Trivia Question Discussion")
+    #             await thread.send("Discuss today's trivia question here!")
+
+    #         elif question and options and correct_answer_letter and not self.channel:
+    #             print("Channel not found or missing. Check the configuration.\n")
+    #         elif self.channel and not question and not options and not correct_answer_letter:
+    #             print("Could not generate trivia question.\n.")
+    #         else:
+    #             print("Other error in start().\n")
     async def start(self):
         while True:
             now = datetime.now(pytz.timezone(self.timezone))
+            print(now)
             next_run = now.replace(hour=12, minute=0, second=0, microsecond=0)
+            print(next_run)
+            
             if now >= next_run:
                 next_run += timedelta(days=1)
+                print("new next run", next_run)
+            
             wait_seconds = (next_run - now).total_seconds()
             print(f"Waiting {wait_seconds} seconds until the next message at 12:00 PM {self.timezone}.")
             await asyncio.sleep(wait_seconds)
+            
+            # Recalculate `now` and `next_run` after waking up to ensure exact timing
+            now = datetime.now(pytz.timezone(self.timezone))
+            next_run = now.replace(hour=12, minute=0, second=0, microsecond=0)
+        
+            if now >= next_run:
+                # Proceed with sending the message only if it's exactly 12:00 PM
+                question, options, correct_answer_letter = await self.generate_trivia_prompt()
+                if question and options and correct_answer_letter and self.channel:
+                    await self.unpin_messages()
 
-            question, options, correct_answer_letter = await self.generate_trivia_prompt()
-            if question and options and correct_answer_letter and self.channel:
-                await self.unpin_messages()
+                    message = f"@everyone It's trivia time! 🎉\n`{question}`\n"
+                    message += "\nReact with 🎹 for A\nReact with 🎧 for B\nReact with 🎸 for C\nReact with 🎵 for D."
+                    sent_message = await self.channel.send(message)
+                    emojis = {'A': '🎹', 'B': '🎧', 'C': '🎸', 'D': '🎵'}
+                    for option in options:
+                        emoji = emojis[option.strip()[0]]
+                        await sent_message.add_reaction(emoji)
 
-                message = f"@everyone It's trivia time! 🎉\n`{question}`\n"
-                message += "\nReact with 🎹 for A\nReact with 🎧 for B\nReact with 🎸 for C\nReact with 🎵 for D."
-                sent_message = await self.channel.send(message)
-                emojis = {'A': '🎹', 'B': '🎧', 'C': '🎸', 'D': '🎵'}
-                for option in options:
-                    emoji = emojis[option.strip()[0]]
-                    await sent_message.add_reaction(emoji)
+                    await sent_message.pin()
+                    thread = await sent_message.create_thread(name="Trivia Question Discussion")
+                    await thread.send("Discuss today's trivia question here!")
 
-                await sent_message.pin()
-                thread = await sent_message.create_thread(name="Trivia Question Discussion")
-                await thread.send("Discuss today's trivia question here!")
-
-            elif question and options and correct_answer_letter and not self.channel:
-                print("Channel not found or missing. Check the configuration.\n")
-            elif self.channel and not question and not options and not correct_answer_letter:
-                print("Could not generate trivia question.\n.")
-            else:
-                print("Other error in start().\n")
+                elif question and options and correct_answer_letter and not self.channel:
+                    print("Channel not found or missing. Check the configuration.\n")
+                elif self.channel and not question and not options and not correct_answer_letter:
+                    print("Could not generate trivia question.\n.")
+                else:
+                    print("Other error in start().\n")
 
 
 
+# class DailyTuneInBot:
+#     def __init__(self, channel, timezone='US/Pacific'):
+#         self.channel = channel
+#         self.timezone = timezone
+
+#     async def start(self):
+#         while True:
+#             now = datetime.now(pytz.timezone(self.timezone))
+#             next_run = now.replace(hour=17, minute=0, second=0, microsecond=0)
+#             if now >= next_run:
+#                 next_run += timedelta(days=1)
+#             wait_seconds = (next_run - now).total_seconds()
+#             print(f"Waiting {wait_seconds} seconds until the next message at 5:00 PM {self.timezone}.")
+#             await asyncio.sleep(wait_seconds)
+
+#             if self.channel:
+#                 await self.channel.send("@everyone It's daily tune-in time! 🎶\n")
+#                 await self.channel.send("Use `/authenticate` to re-authenticate with Spotify.")
+#                 await self.channel.send("Then use `/currently_playing` to share your currently playing song!")
+#             else:
+#                 print("Daily tune-in channel not found. Check the configuration.\n")
 class DailyTuneInBot:
     def __init__(self, channel, timezone='US/Pacific'):
         self.channel = channel
@@ -318,12 +387,18 @@ class DailyTuneInBot:
             print(f"Waiting {wait_seconds} seconds until the next message at 5:00 PM {self.timezone}.")
             await asyncio.sleep(wait_seconds)
 
-            if self.channel:
-                await self.channel.send("@everyone It's daily tune-in time! 🎶\n")
-                await self.channel.send("Use `/authenticate` to re-authenticate with Spotify.")
-                await self.channel.send("Then use `/currently_playing` to share your currently playing song!")
-            else:
-                print("Daily tune-in channel not found. Check the configuration.\n")
+            # Recalculate `now` and `next_run` after waking up to ensure exact timing
+            now = datetime.now(pytz.timezone(self.timezone))
+            next_run = now.replace(hour=17, minute=0, second=0, microsecond=0)
+
+            if now >= next_run:
+                # Proceed with sending the message only if it's exactly 5:00 PM
+                if self.channel:
+                    await self.channel.send("@everyone It's daily tune-in time! 🎶\n")
+                    await self.channel.send("Use `/authenticate` to re-authenticate with Spotify.")
+                    await self.channel.send("Then use `/currently_playing` to share your currently playing song!")
+                else:
+                    print("Daily tune-in channel not found. Check the configuration.\n")
 
 
 
@@ -341,8 +416,8 @@ class SpotifyBot:
         @self.tree.command(name='authenticate', description='Authenticate with Spotify', guild=self.guild)
         async def authenticate_spotify(interaction: discord.Interaction):
             user_id = str(interaction.user.id)
-            auth_url = f"http://localhost:8888/login?user_id={user_id}"
-            # auth_url = f"https://771f-128-12-123-153.ngrok-free.app/login?user_id={user_id}"
+            # auth_url = f"http://localhost:8888/login?user_id={user_id}"
+            auth_url = f"https://5c04-128-12-123-206.ngrok-free.app/login?user_id={user_id}"
             await interaction.response.send_message(f"Please authenticate using this URL: {auth_url}", ephemeral=True)
 
         @self.tree.command(name='spotify_profile', description='Share your Spotify profile', guild=self.guild)
@@ -613,9 +688,9 @@ class SpotifyBot:
                         await interaction.followup.send(f"AI Recommendations:\n{new_recommendation}")
                         add_recommendation(user_id, 'random', new_recommendation)
                     else:
-                        await interaction.followup.send("Failed to generate recommendations. Please try again later.")
+                        await interaction.followup.send("Failed to generate recommendations. Please try again later.", ephemeral=True)
                 except Exception as e:
-                    await interaction.followup.send(f"Error occurred: {e}")
+                    await interaction.followup.send(f"Error occurred: {e}", ephemeral=True)
                 return
 
             if search_type.lower() == "song":
@@ -821,17 +896,34 @@ class SpotifyBot:
         top_artists = sp.current_user_top_artists(limit=5)
         return [artist['name'] for artist in top_artists['items']]
 
+    # async def get_fresh_token(self, token_info, user_id):
+    #         if token_info and (token_info.expires_at - int(time.time()) < 60):
+    #             # Token needs refreshing
+    #             refresh_url = f"https://5c04-128-12-123-206.ngrok-free.app/refresh_token?refresh_token={token_info.refresh_token}"
+    #             response = requests.get(refresh_url)
+    #             if response.status_code == 200:
+    #                 refreshed_token_info = response.json()
+    #                 if 'expires_in' in refreshed_token_info:
+    #                     refreshed_token_info['expires_at'] = int(time.time()) + refreshed_token_info['expires_in']
+    #                     save_token(user_id, refreshed_token_info)  # Save the refreshed token to the database
+    #                     return refreshed_token_info['access_token']
+    #                 else:
+    #                     logging.error(f"Response did not contain 'expires_in': {refreshed_token_info}")
+    #                     return None
+    #             else:
+    #                 logging.error(f"Failed to refresh token: {response.status_code} {response.text}")
+    #                 return None
+    #         return token_info.access_token if token_info else None
+
     async def get_fresh_token(self, token_info, user_id):
         if token_info and (token_info.expires_at - int(time.time()) < 60):
             # Token needs refreshing
-            refresh_url = f"http://localhost:8888/refresh_token?refresh_token={token_info.refresh_token}"
+            refresh_url = f"https://5c04-128-12-123-206.ngrok-free.app/refresh_token?refresh_token={token_info.refresh_token}"
             response = requests.get(refresh_url)
             if response.status_code == 200:
                 refreshed_token_info = response.json()
-                logging.debug(f"Refreshed token response: {refreshed_token_info}")
-                expires_in = refreshed_token_info.get('expires_in')
-                if expires_in is not None:
-                    refreshed_token_info['expires_at'] = int(time.time()) + expires_in
+                if 'expires_in' in refreshed_token_info:
+                    refreshed_token_info['expires_at'] = int(time.time()) + refreshed_token_info['expires_in']
                 else:
                     logging.error(f"Response did not contain 'expires_in': {refreshed_token_info}")
                     # Set a default expires_at if 'expires_in' is missing (assuming 1 hour lifespan)

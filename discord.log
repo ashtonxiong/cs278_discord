@@ -1,3 +1,9 @@
-2024-06-04 01:09:31,802:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
-2024-06-04 01:09:31,829:INFO:discord.client: logging in using static token
-2024-06-04 01:09:32,831:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: 4e7e5faae56e038d8800197ed7fc19c0).
+2024-06-05 17:35:42,523:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
+2024-06-05 17:35:42,541:INFO:discord.client: logging in using static token
+2024-06-05 17:35:43,410:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: f89af365b60cee16e6218d343fdd8aac).
+2024-06-05 17:53:48,293:INFO:discord.gateway: Shard ID None has successfully RESUMED session f89af365b60cee16e6218d343fdd8aac.
+2024-06-05 19:41:11,501:INFO:discord.gateway: Shard ID None has successfully RESUMED session f89af365b60cee16e6218d343fdd8aac.
+2024-06-05 20:03:33,180:INFO:discord.gateway: Shard ID None has successfully RESUMED session f89af365b60cee16e6218d343fdd8aac.
+2024-06-05 20:13:48,159:INFO:discord.gateway: Shard ID None session has been invalidated.
+2024-06-05 20:13:53,689:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: cf17487dc58e460ed10e3b6a038358ac).
+2024-06-05 20:16:01,217:INFO:discord.gateway: Shard ID None has successfully RESUMED session cf17487dc58e460ed10e3b6a038358ac.
